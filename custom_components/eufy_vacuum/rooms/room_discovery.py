@@ -76,6 +76,17 @@ from ..entity_helpers import BLANK_STATE_VALUES, is_blank_state
 
 _LOGGER = logging.getLogger(__name__)
 
+#: Roles already complained about by [MAP-ANCHOR-1], keyed (vacuum_entity_id,
+#: active_map_entity_id). Module-level because get_active_map_id is a module function
+#: with no instance to hang it on; the instance-level twin is
+#: ``jobs/active_job.py::_multi_in_flight_warned``.
+#:
+#: BOUNDED BY CONSTRUCTION: one entry per vacuum+role, never per value — see the
+#: comment at the warn site for why keying on the value would both grow without bound
+#: and defeat the throttle. Cleared on a clean resolution so a later regression is
+#: reported rather than swallowed.
+_MISBOUND_ACTIVE_MAP_WARNED: set[tuple[str, str]] = set()
+
 # HA sentinel states that mean "no usable value".
 #: Kept as a NAME (diagnostics imports it) but derived from the shared vocabulary so the
 #: MEMBERSHIP cannot drift again. It gains "null" — this sensor previously caught only
@@ -165,15 +176,37 @@ def get_active_map_id(hass: HomeAssistant, vacuum_entity_id: str) -> str | None:
                 # only fires against a map set we actually have.
                 known = _known_map_ids(hass, vacuum_entity_id, config)
                 if known is not None and str(value) not in known:
-                    _LOGGER.warning(
-                        "Active map entity %s for %s reports %r, which is not one of "
-                        "this vacuum's maps (%s). Refusing it as a map anchor — check "
-                        "that this role points at the map SELECTOR and not at a camera "
-                        "or another entity whose state is not a map id.",
-                        active_map_entity, vacuum_entity_id, value,
-                        ", ".join(sorted(known)) or "none",
-                    )
+                    # WARN ONCE PER MIS-BOUND ROLE, not once per resolution. This
+                    # resolver runs on a ~60s timer, so an unthrottled warning gives the
+                    # one user it exists for ~1440 identical lines a day, per vacuum,
+                    # forever — and a log that repeats that hard is a log nobody reads,
+                    # which costs exactly the diagnostic this was added to provide.
+                    #
+                    # KEYED ON THE ROLE, NOT THE VALUE, and that is the whole trick. The
+                    # value that triggered ISSUE #60 is a camera's last-updated
+                    # TIMESTAMP: it changes every map update, so a (role, value) key
+                    # would grow without bound AND still warn on nearly every pass. The
+                    # user needs telling that the role is mis-bound; which wrong value
+                    # it happened to hold is incidental.
+                    warn_key = (vacuum_entity_id, active_map_entity)
+                    if warn_key not in _MISBOUND_ACTIVE_MAP_WARNED:
+                        _MISBOUND_ACTIVE_MAP_WARNED.add(warn_key)
+                        _LOGGER.warning(
+                            "Active map entity %s for %s reports %r, which is not one of "
+                            "this vacuum's maps (%s). Refusing it as a map anchor — check "
+                            "that this role points at the map SELECTOR and not at a camera "
+                            "or another entity whose state is not a map id. (Logged once "
+                            "per role; it will log again if this recurs after a good "
+                            "resolution.)",
+                            active_map_entity, vacuum_entity_id, value,
+                            ", ".join(sorted(known)) or "none",
+                        )
                     return None
+                # Resolved cleanly — forget any past complaint about this role so a
+                # LATER regression is reported again instead of being swallowed by a
+                # latch that never clears. A warn-once set that is never cleared is the
+                # shape that silently stops reporting real recurrences.
+                _MISBOUND_ACTIVE_MAP_WARNED.discard((vacuum_entity_id, active_map_entity))
                 return str(value)
             # Blank/unavailable selector. The meaning depends on the room-list SHAPE:
             #

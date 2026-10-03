@@ -10,6 +10,42 @@ only.
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-10-02
+
+A bugfix release. Four of these came out of [#60](https://github.com/kingchddg901/Vacuum_Agent/issues/60) — thanks to **@Lucius-Waverly** for the report and the diagnostics, which is what made them findable.
+
+> **This release changes backend code, so it needs a full Home Assistant restart**, not just a browser refresh. Three of the four #60 fixes are in the integration rather than the card.
+
+### Fixed
+
+- **Dropdowns in Setup → System kept jumping back to the first one.** Only the top picker was usable; the others reset the moment you touched them, and menus closed as soon as you clicked or scrolled. After every redraw the card re-focuses whatever had focus, and it identified that control by a selector that was not unique — every picker in that table carries the same `data-action`, so all of them resolved to the first row. The card now records *which* control had focus and restores that one.
+
+  This gets worse the busier your Home Assistant is. The card redraws whenever any entity changes state anywhere in your instance, so on a large install a redraw almost always landed in the middle of using a dropdown; on a quiet one it often got away with it. Same bug either way.
+
+- **"No map could be identified" when the Active Map role pointed at the wrong entity.** If that role is bound to something whose state is not a map id — a camera, for instance, whose state is a timestamp — the integration took that value as the map anchor and then matched nothing. It now refuses a value that names none of the vacuum's maps and logs it once, naming the entity, the value and the map ids it should have matched.
+
+- **Diagnostics reported a healthy vacuum that could not import.** The self-check said rooms were importable, that maps and the live map all worked, and raised no warnings — on an install where the import had just failed and zero rooms were visible in the same report. It now checks that the active map actually names one of the vacuum's maps before claiming any of that, and the warning points at the mis-bound role instead of blaming your vacuum's integration.
+
+- **Diagnostics told Dreame and Roborock owners their live map depended on a Eufy integration.** That line is now written for whichever brand you actually have.
+
+- **The delete button on a theme preset was invisible.** It was painted underneath the preview panel.
+
+- **The number box beside a theme slider accepted values outside the token's range.** They were stored as typed and then clamped on the way back in, so a theme could come back different from what you entered — 5 went in, 1 came out on a 0–1 token. The box now clamps to the same bound the slider uses.
+
+- **The card header ignored a per-vacuum title you had set**, showing the vacuum integration's own name instead. The header now prefers your title. For automations, `get_dashboard_snapshot` returns a new `panel_title` key (null when you haven't set one).
+
+### Changed
+
+- **Blur and vein-chroma sliders reach further.** Blur went from 0–8 to 0–32 and minor-vein chroma from 0–2 to 0–8: 24px is a visibly different vein and the slider simply could not get there.
+
+- **Floor materials are front and centre in the theme gallery.** Theme previews now render the floor-material board first, and the mask assets are actually served to the preview harness — a theme that defines floor materials gets its materials shown rather than a generic card shot.
+
+- **Theme submissions no longer collide on name.** A submitted theme whose name already exists is given a numbered suffix at intake, so two gallery cards can no longer share one name.
+
+- **Black One** has been revised. The community submission in [#58](https://github.com/kingchddg901/Vacuum_Agent/issues/58) brought the palette and squarer radii; the molten marble and oxide chip edges came in later passes.
+
+- The licence now carries the copyright holder's name rather than a username.
+
 ## [2.2.0] - 2026-09-13
 
 ### Added

@@ -110,8 +110,13 @@ export const SCALAR_RANGES = Object.freeze({
  * copies of the same three lines, which is the shape where one gets fixed and the
  * other does not.
  *
- * clampMin/clampMax when present, else the slider's min/max so a spec minted
- * before the split still behaves.
+ * Returns the spec's min/max. There is ONE range per token and all three readers
+ * share it — the slider, the number field beside it, and the importer's clamp — so
+ * they cannot drift. (A `clampMin`/`clampMax` second range was described here and
+ * at `ranged` below, and was never implemented: nothing mints those fields and
+ * nothing reads them. The description is removed rather than the split built,
+ * because a single shared bound is what actually ships and what ISSUE #60's audit
+ * confirmed by measurement.)
  *
  * @param {object|null} spec - a THEME_TOKEN_MAP entry.
  * @returns {{min: number|null, max: number|null}} nulls where unbounded.
@@ -216,11 +221,16 @@ export function makeTypedGroupToken(group, defaultType = "color") {
 
   // Range-carrying semantic methods. type:"number" + the kind's range, with an
   // optional per-token { min?, max?, step? } override merged on top.
-  // Each bounded scalar carries TWO ranges: min/max drives the editor slider,
-  // clampMin/clampMax is what the importer will accept. A per-token override that
-  // widens min/max (e.g. the 0-2 chroma, the +/-8 signed blurs) must widen the
-  // clamp with it, or the escape hatch would reintroduce the lossy round trip for
-  // exactly the tokens someone bothered to give extra room.
+  // Each bounded scalar carries ONE range. min/max drives the editor slider, the
+  // number field beside it (scalarClampBounds) and the importer's clamp alike, so
+  // widening a per-token override widens all three together and they cannot drift.
+  //
+  // ⚠ This said a scalar carried TWO ranges — min/max for the slider, clampMin/
+  // clampMax for the importer — and instructed anyone widening an override to widen
+  // the clamp with it. That instruction could not be followed: no spec mints
+  // clampMin/clampMax and no code reads them. Corrected rather than implemented,
+  // because one shared bound is what ships and is what the ISSUE #60 release audit
+  // verified against the v2.2.0 source.
   const ranged = (defaults) => (key, label = null, override = null) =>
     groupedToken(key, label, "number", { ...defaults, ...(override || {}) });
 

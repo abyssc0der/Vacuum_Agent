@@ -549,6 +549,61 @@ def test_rd_anchor_3_unknowable_map_set_must_not_reject(hass, manager):
     assert get_active_map_id(hass, _VAC) == "Downstairs"
 
 
+def test_rd_anchor_5_the_warning_fires_once_not_every_resolution(hass, manager, caplog):
+    """[RD-ANCHOR-5] this resolver runs on a ~60s timer, so an unthrottled warning is
+    ~1440 identical lines a day per vacuum — a log that repeats that hard is a log
+    nobody reads, which costs the diagnostic the warning exists to provide.
+
+    THE KEY IS THE ROLE, NOT THE VALUE, and this test pins that: the value here is a
+    CHANGING timestamp, exactly like the camera state in ISSUE #60. Key on (role, value)
+    and the set grows without bound AND warns on nearly every pass."""
+    from custom_components.eufy_vacuum.rooms.room_discovery import (
+        _MISBOUND_ACTIVE_MAP_WARNED,
+    )
+    _MISBOUND_ACTIVE_MAP_WARNED.clear()
+    _per_map_adapter()
+    hass.states.async_set(_VAC, "docked", {"rooms": {"1": [{"id": 1, "name": "Kitchen"}]}})
+
+    caplog.clear()
+    for tick in range(5):
+        # A DIFFERENT bad value each pass — the camera's timestamp moves.
+        hass.states.async_set("sensor.alfred_map", f"2026-10-02 11:04:3{tick}")
+        assert get_active_map_id(hass, _VAC) is None
+
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"
+                and "not one of" in r.getMessage()]
+    assert len(warnings) == 1, f"warned {len(warnings)} times across 5 resolutions"
+    assert len(_MISBOUND_ACTIVE_MAP_WARNED) == 1, "the warned set grew per value"
+
+
+def test_rd_anchor_6_a_clean_resolution_rearms_the_warning(hass, manager, caplog):
+    """[RD-ANCHOR-6] a warn-once latch that never clears is the shape that silently
+    stops reporting real recurrences. Fix the binding, break it again, and the user
+    must be told again."""
+    from custom_components.eufy_vacuum.rooms.room_discovery import (
+        _MISBOUND_ACTIVE_MAP_WARNED,
+    )
+    _MISBOUND_ACTIVE_MAP_WARNED.clear()
+    _per_map_adapter()
+    hass.states.async_set(_VAC, "docked", {"rooms": {"1": [{"id": 1, "name": "Kitchen"}]}})
+
+    def _bad_then_count():
+        caplog.clear()
+        hass.states.async_set("sensor.alfred_map", "2026-10-02 11:04:35")
+        assert get_active_map_id(hass, _VAC) is None
+        return len([r for r in caplog.records if r.levelname == "WARNING"
+                    and "not one of" in r.getMessage()])
+
+    assert _bad_then_count() == 1, "first breakage must warn"
+
+    # The user fixes the binding — a clean resolution must disarm the latch.
+    hass.states.async_set("sensor.alfred_map", "1")
+    assert get_active_map_id(hass, _VAC) == "1"
+    assert not _MISBOUND_ACTIVE_MAP_WARNED, "a good resolution did not clear the latch"
+
+    assert _bad_then_count() == 1, "a RECURRENCE after a good resolution went unreported"
+
+
 def test_rd_anchor_4_flat_list_brand_is_never_validated(hass, manager):
     """[RD-ANCHOR-4] Backward-compatibility pin for both shipped brands. A flat_list
     room source carries no map identity at all, so there is nothing to validate against
