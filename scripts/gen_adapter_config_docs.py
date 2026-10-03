@@ -1335,9 +1335,20 @@ def render_config_reference() -> str:
           f"*Source:* `{rel(CFG_PY)}:{TOP_LINENO.get(k, '?')}`."
           + (f" *Registration check:* `{rel(REG_PY)}:{sorted(REG_CHECKED[k])[0]}`." if k in REG_CHECKED else ""))
         A("")
-        cs = sorted(set(CONSUMERS.get(k) or []))
+        # FILES, NOT file:line — the same ruling already applied to the theme-token
+        # generator in 80f1f56c ("the token usage trace records FILES, not file:line").
+        # This generator kept the line numbers, so ANY edit above a read site rewrote
+        # this doc and failed check_generated_docs with no change of meaning: the
+        # ISSUE #60 fixes moved diagnostics.py and room_discovery.py and broke CI
+        # having changed nothing a reader of this table cares about.
+        #
+        # What matters here is WHICH MODULES read a key, which is what the sentence
+        # claims. Lines are collected still — the D10 finding cites one example site
+        # and a line genuinely helps there — they are just not rendered into the doc.
+        cs = sorted({re.sub(r":\d+$", "", c) for c in (CONSUMERS.get(k) or [])})
         if cs:
-            A(f"*Read sites found by a conservative static scan ({len(cs)}; a floor, not a complete set):* "
+            A(f"*Read in {len(cs)} module(s), found by a conservative static scan "
+              f"(a floor, not a complete set):* "
               + ", ".join(f"`{c}`" for c in cs[:8]) + (" ..." if len(cs) > 8 else ""))
             A("")
     return "\n".join(L).rstrip() + "\n"

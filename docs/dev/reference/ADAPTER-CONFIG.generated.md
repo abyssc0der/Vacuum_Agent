@@ -191,7 +191,7 @@ Unique identifier for this adapter. Used for logging and disambiguation when mul
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:33`.
 
-*Read sites found by a conservative static scan (15; a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/config_loader.py:81`, `custom_components/eufy_vacuum/adapters/registry.py:166`, `custom_components/eufy_vacuum/adapters/registry.py:192`, `custom_components/eufy_vacuum/adapters/registry.py:289`, `custom_components/eufy_vacuum/adapters/registry.py:656`, `custom_components/eufy_vacuum/adapters/registry.py:698`, `custom_components/eufy_vacuum/adapters/registry.py:734`, `custom_components/eufy_vacuum/adapters/registry.py:762` ...
+*Read in 7 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/config_loader.py`, `custom_components/eufy_vacuum/adapters/registry.py`, `custom_components/eufy_vacuum/core/error_tracker.py`, `custom_components/eufy_vacuum/core/manager.py`, `custom_components/eufy_vacuum/room_entities.py`, `custom_components/eufy_vacuum/services/adapter_config.py`, `custom_components/eufy_vacuum/setup/workflow.py`
 
 ### `source`
 
@@ -203,7 +203,7 @@ Allowed values: `code`, `config`
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:43`.
 
-*Read sites found by a conservative static scan (6; a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py:179`, `custom_components/eufy_vacuum/adapters/registry.py:194`, `custom_components/eufy_vacuum/adapters/registry.py:749`, `custom_components/eufy_vacuum/adapters/registry.py:764`, `custom_components/eufy_vacuum/mapping/map_source_coordinator.py:302`, `custom_components/eufy_vacuum/services/adapter_config.py:207`
+*Read in 3 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py`, `custom_components/eufy_vacuum/mapping/map_source_coordinator.py`, `custom_components/eufy_vacuum/services/adapter_config.py`
 
 ### `display_name`
 
@@ -221,7 +221,7 @@ Short brand/app name the card uses in copy — e.g. "Eufy" renders "Clean from t
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:70`.
 
-*Read sites found by a conservative static scan (6; a floor, not a complete set):* `custom_components/eufy_vacuum/core/error_tracker.py:270`, `custom_components/eufy_vacuum/diagnostics.py:152`, `custom_components/eufy_vacuum/diagnostics.py:780`, `custom_components/eufy_vacuum/diagnostics.py:781`, `custom_components/eufy_vacuum/learning/brand_facts.py:64`, `custom_components/eufy_vacuum/setup/workflow.py:167`
+*Read in 4 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/core/error_tracker.py`, `custom_components/eufy_vacuum/diagnostics.py`, `custom_components/eufy_vacuum/learning/brand_facts.py`, `custom_components/eufy_vacuum/setup/workflow.py`
 
 ## Entities
 
@@ -267,7 +267,7 @@ Full HA entity IDs for companion entities.
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:84`.
 
-*Read sites found by a conservative static scan (45; a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py:648`, `custom_components/eufy_vacuum/battery/manager.py:676`, `custom_components/eufy_vacuum/core/charging.py:56`, `custom_components/eufy_vacuum/core/charging.py:83`, `custom_components/eufy_vacuum/core/error_tracker.py:594`, `custom_components/eufy_vacuum/core/manager.py:1784`, `custom_components/eufy_vacuum/core/manager.py:3751`, `custom_components/eufy_vacuum/core/manager.py:3962` ...
+*Read in 26 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py`, `custom_components/eufy_vacuum/battery/manager.py`, `custom_components/eufy_vacuum/core/charging.py`, `custom_components/eufy_vacuum/core/error_tracker.py`, `custom_components/eufy_vacuum/core/manager.py`, `custom_components/eufy_vacuum/core/water_amendment.py`, `custom_components/eufy_vacuum/diagnostics.py`, `custom_components/eufy_vacuum/dispatch/manager.py` ...
 
 ## Vocabulary
 
@@ -318,7 +318,7 @@ Brand-specific state vocabulary sets.
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:393`.
 
-*Read sites found by a conservative static scan (12; a floor, not a complete set):* `custom_components/eufy_vacuum/core/error_tracker.py:135`, `custom_components/eufy_vacuum/core/manager.py:3734`, `custom_components/eufy_vacuum/core/manager.py:5845`, `custom_components/eufy_vacuum/core/run_state.py:65`, `custom_components/eufy_vacuum/dock/manager.py:231`, `custom_components/eufy_vacuum/jobs/active_job.py:1959`, `custom_components/eufy_vacuum/learning/brand_facts.py:60`, `custom_components/eufy_vacuum/listeners/pose_sampler.py:182` ...
+*Read in 10 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/core/error_tracker.py`, `custom_components/eufy_vacuum/core/manager.py`, `custom_components/eufy_vacuum/core/run_state.py`, `custom_components/eufy_vacuum/dock/manager.py`, `custom_components/eufy_vacuum/jobs/active_job.py`, `custom_components/eufy_vacuum/learning/brand_facts.py`, `custom_components/eufy_vacuum/listeners/pose_sampler.py`, `custom_components/eufy_vacuum/planning/run_plan.py` ...
 
 ## Completion
 
@@ -339,7 +339,7 @@ Job completion signal configuration.
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:685`.
 
-*Read sites found by a conservative static scan (8; a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py:643`, `custom_components/eufy_vacuum/adapters/registry.py:685`, `custom_components/eufy_vacuum/diagnostics.py:810`, `custom_components/eufy_vacuum/jobs/active_job.py:3234`, `custom_components/eufy_vacuum/listeners/_common.py:281`, `custom_components/eufy_vacuum/listeners/_common.py:379`, `custom_components/eufy_vacuum/listeners/lifecycle.py:332`, `custom_components/eufy_vacuum/listeners/lifecycle.py:376`
+*Read in 5 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py`, `custom_components/eufy_vacuum/diagnostics.py`, `custom_components/eufy_vacuum/jobs/active_job.py`, `custom_components/eufy_vacuum/listeners/_common.py`, `custom_components/eufy_vacuum/listeners/lifecycle.py`
 
 ## Charging
 
@@ -358,7 +358,7 @@ Low-battery mid-job return detection. The charging *state* itself is read from t
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:752`.
 
-*Read sites found by a conservative static scan (2; a floor, not a complete set):* `custom_components/eufy_vacuum/core/charging.py:83`, `custom_components/eufy_vacuum/jobs/active_job.py:505`
+*Read in 2 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/core/charging.py`, `custom_components/eufy_vacuum/jobs/active_job.py`
 
 ## Error Tracking
 
@@ -389,7 +389,7 @@ CODE TYPE (R2-TYPE-1): the five classification tables below are keyed `int|str`,
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:789`.
 
-*Read sites found by a conservative static scan (3; a floor, not a complete set):* `custom_components/eufy_vacuum/core/error_tracker.py:153`, `custom_components/eufy_vacuum/core/error_tracker.py:819`, `custom_components/eufy_vacuum/core/manager.py:4972`
+*Read in 2 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/core/error_tracker.py`, `custom_components/eufy_vacuum/core/manager.py`
 
 ## Dock Events
 
@@ -410,7 +410,7 @@ Dock event recording configuration.
 
 *Declared by:* eufy, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:944`.
 
-*Read sites found by a conservative static scan (9; a floor, not a complete set):* `custom_components/eufy_vacuum/core/manager.py:5910`, `custom_components/eufy_vacuum/dock/manager.py:105`, `custom_components/eufy_vacuum/dock/manager.py:230`, `custom_components/eufy_vacuum/dock/manager.py:504`, `custom_components/eufy_vacuum/jobs/active_job.py:725`, `custom_components/eufy_vacuum/listeners/dock_events.py:122`, `custom_components/eufy_vacuum/listeners/dock_events.py:92`, `custom_components/eufy_vacuum/listeners/lifecycle.py:282` ...
+*Read in 5 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/core/manager.py`, `custom_components/eufy_vacuum/dock/manager.py`, `custom_components/eufy_vacuum/jobs/active_job.py`, `custom_components/eufy_vacuum/listeners/dock_events.py`, `custom_components/eufy_vacuum/listeners/lifecycle.py`
 
 ## Post-Job Wash Amendment
 
@@ -432,7 +432,7 @@ Post-job mop wash water amendment configuration. Only needed for brands whose do
 
 *Declared by:* eufy. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:998`.
 
-*Read sites found by a conservative static scan (4; a floor, not a complete set):* `custom_components/eufy_vacuum/core/water_amendment.py:81`, `custom_components/eufy_vacuum/listeners/lifecycle.py:579`, `custom_components/eufy_vacuum/listeners/lifecycle.py:586`, `custom_components/eufy_vacuum/listeners/lifecycle.py:591`
+*Read in 2 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/core/water_amendment.py`, `custom_components/eufy_vacuum/listeners/lifecycle.py`
 
 ## Room Discovery
 
@@ -463,7 +463,7 @@ Room discovery configuration.
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:1054`.
 
-*Read sites found by a conservative static scan (7; a floor, not a complete set):* `custom_components/eufy_vacuum/onboarding/manager.py:321`, `custom_components/eufy_vacuum/rooms/room_discovery.py:147`, `custom_components/eufy_vacuum/rooms/room_discovery.py:224`, `custom_components/eufy_vacuum/rooms/room_discovery.py:258`, `custom_components/eufy_vacuum/rooms/room_discovery.py:322`, `custom_components/eufy_vacuum/rooms/source_refresh.py:540`, `custom_components/eufy_vacuum/setup/drift.py:150`
+*Read in 4 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/onboarding/manager.py`, `custom_components/eufy_vacuum/rooms/room_discovery.py`, `custom_components/eufy_vacuum/rooms/source_refresh.py`, `custom_components/eufy_vacuum/setup/drift.py`
 
 ## Setup
 
@@ -481,7 +481,7 @@ Setup-flow step declaration. Each step ID maps to a framework-defined service an
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:1227`. *Registration check:* `custom_components/eufy_vacuum/adapters/registry.py:605`.
 
-*Read sites found by a conservative static scan (3; a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py:605`, `custom_components/eufy_vacuum/adapters/registry.py:615`, `custom_components/eufy_vacuum/setup/drift.py:141`
+*Read in 2 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py`, `custom_components/eufy_vacuum/setup/drift.py`
 
 ## Dispatch
 
@@ -527,7 +527,7 @@ Job dispatch configuration.
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:1277`. *Registration check:* `custom_components/eufy_vacuum/adapters/registry.py:558`.
 
-*Read sites found by a conservative static scan (12; a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py:558`, `custom_components/eufy_vacuum/core/manager.py:3649`, `custom_components/eufy_vacuum/core/manager.py:5857`, `custom_components/eufy_vacuum/core/manager.py:6988`, `custom_components/eufy_vacuum/dispatch/manager.py:358`, `custom_components/eufy_vacuum/dispatch/manager.py:623`, `custom_components/eufy_vacuum/dispatch/manager.py:745`, `custom_components/eufy_vacuum/dispatch/manager.py:90` ...
+*Read in 6 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py`, `custom_components/eufy_vacuum/core/manager.py`, `custom_components/eufy_vacuum/dispatch/manager.py`, `custom_components/eufy_vacuum/jobs/active_job.py`, `custom_components/eufy_vacuum/live_refresh/manager.py`, `custom_components/eufy_vacuum/planning/run_plan.py`
 
 ## Capabilities
 
@@ -565,7 +565,7 @@ Explicit capability flag declarations. Override or supplement the entity-presenc
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:1655`.
 
-*Read sites found by a conservative static scan (7; a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py:876`, `custom_components/eufy_vacuum/core/manager.py:1803`, `custom_components/eufy_vacuum/core/manager.py:5877`, `custom_components/eufy_vacuum/dispatch/manager.py:373`, `custom_components/eufy_vacuum/dispatch/manager.py:567`, `custom_components/eufy_vacuum/jobs/active_job.py:1802`, `custom_components/eufy_vacuum/room_entities.py:302`
+*Read in 5 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py`, `custom_components/eufy_vacuum/core/manager.py`, `custom_components/eufy_vacuum/dispatch/manager.py`, `custom_components/eufy_vacuum/jobs/active_job.py`, `custom_components/eufy_vacuum/room_entities.py`
 
 ### `live_transition`
 
@@ -583,7 +583,7 @@ Live room-rollover orchestration. Controls how the framework advances the curren
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:1756`.
 
-*Read sites found by a conservative static scan (1; a floor, not a complete set):* `custom_components/eufy_vacuum/jobs/active_job.py:1130`
+*Read in 1 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/jobs/active_job.py`
 
 ### `external_mid_run_statuses`
 
@@ -593,7 +593,7 @@ task_status strings meaning the robot docked MID-run and will resume (mop wash /
 
 *Declared by:* eufy, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:1800`.
 
-*Read sites found by a conservative static scan (2; a floor, not a complete set):* `custom_components/eufy_vacuum/jobs/active_job.py:3189`, `custom_components/eufy_vacuum/learning/brand_facts.py:74`
+*Read in 2 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/jobs/active_job.py`, `custom_components/eufy_vacuum/learning/brand_facts.py`
 
 ### `external_run`
 
@@ -609,7 +609,7 @@ External (app-started) run capture options.
 
 *Declared by:* dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:1811`.
 
-*Read sites found by a conservative static scan (1; a floor, not a complete set):* `custom_components/eufy_vacuum/learning/external_run.py:202`
+*Read in 1 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/learning/external_run.py`
 
 ## Settings Selects (External-Run Capture)
 
@@ -621,7 +621,7 @@ Global select entities that reflect the current room's per-room settings while a
 
 *Declared by:* eufy. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:1835`.
 
-*Read sites found by a conservative static scan (2; a floor, not a complete set):* `custom_components/eufy_vacuum/core/manager.py:5992`, `custom_components/eufy_vacuum/jobs/active_job.py:2583`
+*Read in 2 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/core/manager.py`, `custom_components/eufy_vacuum/jobs/active_job.py`
 
 ## Maintenance Components
 
@@ -647,7 +647,7 @@ Maintenance component catalog. Keyed by component ID. Defines which components t
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:1850`.
 
-*Read sites found by a conservative static scan (7; a floor, not a complete set):* `custom_components/eufy_vacuum/button.py:43`, `custom_components/eufy_vacuum/core/manager.py:1806`, `custom_components/eufy_vacuum/maintenance/manager.py:1092`, `custom_components/eufy_vacuum/maintenance/manager.py:316`, `custom_components/eufy_vacuum/maintenance/manager.py:539`, `custom_components/eufy_vacuum/number.py:50`, `custom_components/eufy_vacuum/sensor/__init__.py:130`
+*Read in 5 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/button.py`, `custom_components/eufy_vacuum/core/manager.py`, `custom_components/eufy_vacuum/maintenance/manager.py`, `custom_components/eufy_vacuum/number.py`, `custom_components/eufy_vacuum/sensor/__init__.py`
 
 ## Upkeep Catalog
 
@@ -667,7 +667,7 @@ Per-model upkeep guide catalog. Display data only — pure strings, no logic. Th
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:1963`.
 
-*Read sites found by a conservative static scan (3; a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/upkeep_keys.py:447`, `custom_components/eufy_vacuum/maintenance/manager.py:208`, `custom_components/eufy_vacuum/maintenance/manager.py:242`
+*Read in 2 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/upkeep_keys.py`, `custom_components/eufy_vacuum/maintenance/manager.py`
 
 ## Water Model Configs
 
@@ -689,7 +689,7 @@ Per-model physical water-tank dimensions. Each entry maps a device model code to
 
 *Declared by:* eufy. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:2029`.
 
-*Read sites found by a conservative static scan (1; a floor, not a complete set):* `custom_components/eufy_vacuum/planning/run_plan.py:334`
+*Read in 1 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/planning/run_plan.py`
 
 ## Pluggable Engines + Late-Added Blocks
 
@@ -701,7 +701,7 @@ Pluggable MAP segmenter engine selection + tuning (doc 22 §13a). Engine name an
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:2131`. *Registration check:* `custom_components/eufy_vacuum/adapters/registry.py:398`.
 
-*Read sites found by a conservative static scan (5; a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py:398`, `custom_components/eufy_vacuum/core/manager.py:5921`, `custom_components/eufy_vacuum/core/manager.py:6387`, `custom_components/eufy_vacuum/diagnostics.py:470`, `custom_components/eufy_vacuum/mapping/mapping_services.py:1289`
+*Read in 4 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py`, `custom_components/eufy_vacuum/core/manager.py`, `custom_components/eufy_vacuum/diagnostics.py`, `custom_components/eufy_vacuum/mapping/mapping_services.py`
 
 ### `map_state_source`
 
@@ -711,7 +711,7 @@ Read the provider's own map segmentation instead of segmenting an image (doc 22 
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:2141`.
 
-*Read sites found by a conservative static scan (11; a floor, not a complete set):* `custom_components/eufy_vacuum/diagnostics.py:1009`, `custom_components/eufy_vacuum/dispatch/manager.py:150`, `custom_components/eufy_vacuum/listeners/pose_sampler.py:165`, `custom_components/eufy_vacuum/listeners/pose_sampler.py:257`, `custom_components/eufy_vacuum/listeners/stall_capture.py:102`, `custom_components/eufy_vacuum/mapping/map_source_coordinator.py:193`, `custom_components/eufy_vacuum/mapping/map_source_coordinator.py:466`, `custom_components/eufy_vacuum/mapping/map_source_coordinator.py:679` ...
+*Read in 5 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/diagnostics.py`, `custom_components/eufy_vacuum/dispatch/manager.py`, `custom_components/eufy_vacuum/listeners/pose_sampler.py`, `custom_components/eufy_vacuum/listeners/stall_capture.py`, `custom_components/eufy_vacuum/mapping/map_source_coordinator.py`
 
 ### `goto`
 
@@ -721,7 +721,7 @@ Go-to (cruise-to-a-point) service declaration: service_domain / service_name and
 
 *Declared by:* dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:2150`.
 
-*Read sites found by a conservative static scan (1; a floor, not a complete set):* `custom_components/eufy_vacuum/dispatch/manager.py:560`
+*Read in 1 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/dispatch/manager.py`
 
 ### `zone`
 
@@ -731,7 +731,7 @@ DEDICATED zone-clean service declaration (a brand whose zone clean is its own se
 
 *Declared by:* dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:2161`.
 
-*Read sites found by a conservative static scan (2; a floor, not a complete set):* `custom_components/eufy_vacuum/core/manager.py:5955`, `custom_components/eufy_vacuum/dispatch/manager.py:362`
+*Read in 2 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/core/manager.py`, `custom_components/eufy_vacuum/dispatch/manager.py`
 
 ### `map_render`
 
@@ -741,7 +741,7 @@ VA-owned client-side map render declaration (doc 22 §13a.3). Presence is the ga
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:2174`.
 
-*Read sites found by a conservative static scan (2; a floor, not a complete set):* `custom_components/eufy_vacuum/core/manager.py:6069`, `custom_components/eufy_vacuum/mapping/map_source_coordinator.py:790`
+*Read in 2 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/core/manager.py`, `custom_components/eufy_vacuum/mapping/map_source_coordinator.py`
 
 ### `device_clean_order`
 
@@ -751,7 +751,7 @@ DEVICE-side clean order — the order the robot itself will clean rooms in, whic
 
 *Declared by:* roborock. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:2191`.
 
-*Read sites found by a conservative static scan (1; a floor, not a complete set):* `custom_components/eufy_vacuum/clean_order/manager.py:242`
+*Read in 1 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/clean_order/manager.py`
 
 ### `job_segmenter`
 
@@ -761,7 +761,7 @@ Pluggable JOB/run segmenter engine + threshold tuning (doc 22 §13a.1). NOTE: an
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:2204`. *Registration check:* `custom_components/eufy_vacuum/adapters/registry.py:430`.
 
-*Read sites found by a conservative static scan (5; a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py:430`, `custom_components/eufy_vacuum/jobs/active_job.py:1428`, `custom_components/eufy_vacuum/jobs/phase_runner.py:1333`, `custom_components/eufy_vacuum/learning/brand_facts.py:111`, `custom_components/eufy_vacuum/learning/brand_facts.py:96`
+*Read in 4 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py`, `custom_components/eufy_vacuum/jobs/active_job.py`, `custom_components/eufy_vacuum/jobs/phase_runner.py`, `custom_components/eufy_vacuum/learning/brand_facts.py`
 
 ### `room_attribution`
 
@@ -771,7 +771,7 @@ Pluggable room-attribution engine (doc 22 §13a.4) — decides which room a capt
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:2215`. *Registration check:* `custom_components/eufy_vacuum/adapters/registry.py:460`.
 
-*Read sites found by a conservative static scan (5; a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py:460`, `custom_components/eufy_vacuum/learning/brand_facts.py:101`, `custom_components/eufy_vacuum/listeners/pose_sampler.py:132`, `custom_components/eufy_vacuum/listeners/pose_sampler.py:150`, `custom_components/eufy_vacuum/mapping/map_source_coordinator.py:302`
+*Read in 4 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py`, `custom_components/eufy_vacuum/learning/brand_facts.py`, `custom_components/eufy_vacuum/listeners/pose_sampler.py`, `custom_components/eufy_vacuum/mapping/map_source_coordinator.py`
 
 ### `room_profiles`
 
@@ -781,7 +781,7 @@ Adapter-declared room profile catalog / overrides (doc 22 §13d). REQUIRED: regi
 
 *Declared by:* eufy, roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:2225`. *Registration check:* `custom_components/eufy_vacuum/adapters/registry.py:507`.
 
-*Read sites found by a conservative static scan (8; a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py:342`, `custom_components/eufy_vacuum/adapters/registry.py:507`, `custom_components/eufy_vacuum/profiles/manager.py:277`, `custom_components/eufy_vacuum/queue/queue_engine.py:264`, `custom_components/eufy_vacuum/rooms/room_defaults.py:113`, `custom_components/eufy_vacuum/rooms/vocabulary_migration.py:188`, `custom_components/eufy_vacuum/rooms/vocabulary_migration.py:210`, `custom_components/eufy_vacuum/sensor/profile.py:130`
+*Read in 6 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py`, `custom_components/eufy_vacuum/profiles/manager.py`, `custom_components/eufy_vacuum/queue/queue_engine.py`, `custom_components/eufy_vacuum/rooms/room_defaults.py`, `custom_components/eufy_vacuum/rooms/vocabulary_migration.py`, `custom_components/eufy_vacuum/sensor/profile.py`
 
 ### `anomaly`
 
@@ -791,7 +791,7 @@ Anomaly-detection thresholds for run sanity checks (doc 22 §13c).
 
 *Declared by:* eufy. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:2252`.
 
-*Read sites found by a conservative static scan (1; a floor, not a complete set):* `custom_components/eufy_vacuum/jobs/active_job.py:1199`
+*Read in 1 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/jobs/active_job.py`
 
 ### `wash_frequency_bounds`
 
@@ -809,7 +809,7 @@ Bounds for the mop-wash cadence control, in minutes (doc 22 §17a). planning/run
 
 *Declared by:* eufy. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:2260`.
 
-*Read sites found by a conservative static scan (1; a floor, not a complete set):* `custom_components/eufy_vacuum/planning/run_plan.py:369`
+*Read in 1 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/planning/run_plan.py`
 
 ### `cleaning_time_unit`
 
@@ -819,7 +819,7 @@ Unit of the vacuum's bare-number cleaning-time counter — "min" or "s" (doc 22 
 
 *Declared by:* roborock, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:2275`.
 
-*Read sites found by a conservative static scan (3; a floor, not a complete set):* `custom_components/eufy_vacuum/jobs/active_job.py:2434`, `custom_components/eufy_vacuum/learning/brand_facts.py:80`, `custom_components/eufy_vacuum/listeners/job_metrics.py:127`
+*Read in 3 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/jobs/active_job.py`, `custom_components/eufy_vacuum/learning/brand_facts.py`, `custom_components/eufy_vacuum/listeners/job_metrics.py`
 
 ### `model_family`
 
@@ -829,7 +829,7 @@ Coarse hardware family (e.g. "x10", "s6") used to select model-specific behavior
 
 *Declared by:* eufy, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:2286`.
 
-*Read sites found by a conservative static scan (2; a floor, not a complete set):* `custom_components/eufy_vacuum/core/manager.py:1794`, `custom_components/eufy_vacuum/core/manager.py:1878`
+*Read in 1 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/core/manager.py`
 
 ### `capability_hints`
 
@@ -839,4 +839,4 @@ Explicit capability declarations fed INTO runtime detection (core/capabilities.d
 
 *Declared by:* eufy, dreame. *Source:* `custom_components/eufy_vacuum/adapters/config_schema.py:2296`. *Registration check:* `custom_components/eufy_vacuum/adapters/registry.py:533`.
 
-*Read sites found by a conservative static scan (2; a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py:533`, `custom_components/eufy_vacuum/core/manager.py:1795`
+*Read in 2 module(s), found by a conservative static scan (a floor, not a complete set):* `custom_components/eufy_vacuum/adapters/registry.py`, `custom_components/eufy_vacuum/core/manager.py`
