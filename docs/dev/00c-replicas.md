@@ -225,6 +225,29 @@ the `constant` rung, the top of the ladder. This records the set until then.
 
 ---
 
+### `RNR60SN8` — the bundled animal roster · **2 copies**
+
+`src/theme-tokens/index.js` decides which per-animal theme tokens EXIST;
+`src/renderers/theme-preview-registry.js` decides which animals the theme editor PREVIEWS.
+Both hold the same hardcoded roster, used only when `window.AnimalSVG` has not loaded —
+the generated-docs build (node, no window) and the first render before the bundle lands.
+
+**Why it drifts silently.** The live roster wins whenever it exists, so a stale copy is
+invisible in a warm browser and wrong everywhere else. Fox shipped and neither copy was
+updated, so fox got no tokens at all — while `src/i18n/en.js:2596` had already defined its
+14 token LABELS and shipped them translated into all 18 packs. Roughly 252 strings naming
+tokens that did not exist. `npm run check:i18n` cannot catch that class: it verifies
+*used keys are defined*, never *defined keys are used*.
+
+⚠ **Mittens is deliberately NOT in either copy and must stay out.** She is
+`memorial: true`; in a browser the live roster narrows her to her protected eye-only set,
+but on the fallback path `declaredColorSuffixes()` returns null and the documented default
+is *show the full catalog* — so listing her publishes 14 tokens **including fur** for a
+memorial animal, in the generated docs a theme author reads. Measured 2026-10-03: adding
+her yielded 14, not her 6. Her absence is the protection, not an omission.
+
+---
+
 ## Finding sets: four ways to ask, and three axes to judge
 
 Derived 2026-08-18 and **tested before being written down** — five mixed candidates run

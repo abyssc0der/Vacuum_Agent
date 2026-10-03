@@ -144,7 +144,11 @@ const STATIC_PREVIEW_ENTRIES = {
    DYNAMIC ENTRIES (per-animal sub-groups)
    ========================================================= */
 
-const BUNDLED_ANIMAL_FALLBACK = ["cat", "dog", "raccoon", "parrot", "snake"];
+// REPLICA RNR60SN8 — the twin lives at src/theme-tokens/index.js, which carries the
+// reasoning. Both rosters must list every bundled animal: this copy decides which
+// previews the theme editor offers, the other decides which tokens exist at all, so a
+// drift between them shows as a preview with no tokens or tokens with no preview.
+const BUNDLED_ANIMAL_FALLBACK = ["cat", "dog", "fox", "raccoon", "parrot", "snake"];
 
 function currentAnimalList() {
   try {

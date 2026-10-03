@@ -94,7 +94,27 @@ const STATIC_AFTER_ANIMALS = [
    'animal-svg-registered'.
    ========================================================= */
 
-const BUNDLED_ANIMAL_FALLBACK = ["cat", "dog", "raccoon", "parrot", "snake"];
+// anchor: RNR60SN8  the bundled animal roster — the replica set
+//
+// Used only when window.AnimalSVG has not loaded yet: the generated-docs build (node,
+// no window) and the first render before the bundle lands. The LIVE list wins whenever
+// it exists, so a stale entry here is invisible in a warm browser and loud everywhere
+// else — which is exactly how it went unnoticed.
+//
+// It was ["cat","dog","raccoon","parrot","snake"] after fox and mittens shipped. The
+// per-animal tokens are DERIVED from this roster, so both animals got none at all:
+// src/i18n/en.js:2596 defines 14 fox token LABELS, translated into all 18 packs, naming
+// tokens that were never generated — ~252 strings pointing at nothing. check:i18n cannot
+// see it (it verifies used->defined, not defined->used).
+//
+// ⚠ MITTENS IS DELIBERATELY ABSENT, and adding her here is the trap. She is
+// `memorial: true` and declares one colour, so in a BROWSER (live roster) she correctly
+// gets her protected eye-only set. But this fallback runs where AnimalSVG is NOT loaded,
+// declaredColorSuffixes() then returns null, and the documented default is "show the full
+// catalog" — so listing her here publishes 14 tokens INCLUDING FUR for a memorial animal,
+// in exactly the generated docs a theme author reads. Her absence is the protection.
+// Measured 2026-10-03: adding her yielded 14, not her 6.
+const BUNDLED_ANIMAL_FALLBACK = ["cat", "dog", "fox", "raccoon", "parrot", "snake"];
 
 function currentAnimalList() {
   try {
