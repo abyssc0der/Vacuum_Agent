@@ -99,8 +99,14 @@ def get_active_map_id(hass: HomeAssistant, vacuum_entity_id: str) -> str | None:
     device, so the config always carries an entity id — "declared" does NOT mean
     "exists". Resolution therefore keys off whether the entity actually exists:
 
-    - Entity present in the state machine → it is the single source of truth
-      (a sentinel value returns None — wait, don't fork a second map).
+    - Entity present in the state machine → it is the source of truth, but no longer
+      an UNCONDITIONAL one. Since [MAP-ANCHOR-1] (ISSUE #60) its state is checked
+      against the vacuum's enumerable map ids: a value that is not one of them is
+      refused and this returns None, because an overridden role can point at an
+      entity whose state was never a map id (a camera reporting a timestamp). The
+      check is skipped entirely when the map set is not enumerable — see
+      `_known_map_ids` — so it cannot reject a valid id during a boot window.
+      (A sentinel value still returns None — wait, don't fork a second map.)
     - Entity absent from the state machine but present in the ENTITY REGISTRY →
       a novel device whose sensor hasn't materialised yet (boot/restart window):
       return None and wait. Must NOT fork a phantom implicit map.
@@ -131,6 +137,43 @@ def get_active_map_id(hass: HomeAssistant, vacuum_entity_id: str) -> str | None:
         if state is not None:
             value = state.state
             if not is_blank_state(value):
+                # [MAP-ANCHOR-1] The entity's state is the id ONLY if it looks like one.
+                #
+                # ISSUE #60. `entities.active_map` is a naming declaration resolved at
+                # runtime, and an entity OVERRIDE pins it with no domain check (see
+                # adapters/entity_resolve.py — the override pass runs before the state
+                # check and applies none of its own). A Dreame owner whose vacuum was
+                # named `vacuum.apartment_doomba_iii_doomba_iii` while its siblings were
+                # `doomba_iii_*` saw every derived id miss, overrode active_map onto
+                # `camera.doomba_iii_map` — the entity literally called "map" — and that
+                # camera's state is the map's LAST-UPDATED TIMESTAMP. So this returned
+                # "2026-10-02 11:04:35" as a map id. It matched no map, import refused
+                # with "No map could be identified", and the value had already travelled
+                # into diagnostics as `active_map_id`.
+                #
+                # DECLINE, NEVER SUBSTITUTE. Returning None costs an import the user was
+                # not getting anyway; substituting the single map when the lookup misses
+                # is the RP-019/ID-2 failure that 17-room-identity.md §"two no-selector
+                # fallbacks" explicitly forbids — serving one map's rooms relabelled with
+                # another map's id. select_segments_for_map draws the same line and
+                # reserves "unknown" for the genuinely-unresolvable case.
+                #
+                # SILENT WHEN UNKNOWABLE. `_known_map_ids` returns None whenever the map
+                # set cannot be enumerated — a flat_list brand, a service brand whose
+                # cache has not refreshed, the boot window before the attribute lands.
+                # Validating then would reject a VALID id on every restart, so the guard
+                # only fires against a map set we actually have.
+                known = _known_map_ids(hass, vacuum_entity_id, config)
+                if known is not None and str(value) not in known:
+                    _LOGGER.warning(
+                        "Active map entity %s for %s reports %r, which is not one of "
+                        "this vacuum's maps (%s). Refusing it as a map anchor — check "
+                        "that this role points at the map SELECTOR and not at a camera "
+                        "or another entity whose state is not a map id.",
+                        active_map_entity, vacuum_entity_id, value,
+                        ", ".join(sorted(known)) or "none",
+                    )
+                    return None
                 return str(value)
             # Blank/unavailable selector. The meaning depends on the room-list SHAPE:
             #
@@ -191,6 +234,55 @@ def _entity_registered(hass: HomeAssistant, entity_id: str) -> bool:
         return er.async_get(hass).async_get(entity_id) is not None
     except Exception:  # pragma: no cover - defensive
         return False
+
+
+def _known_map_ids(
+    hass: HomeAssistant, vacuum_entity_id: str, config: dict | None
+) -> set[str] | None:
+    """The map ids this vacuum actually reports, or None when they are unknowable.
+
+    [MAP-ANCHOR-1]'s evidence source. Enumerates the SAME per-map keying that
+    ``select_segments_for_map`` looks a resolved id up in, so "known here" and
+    "findable there" cannot drift apart.
+
+    ``None`` and ``set()`` mean different things and the caller depends on it:
+
+    - ``None``  — the map set is not enumerable, so no judgement is possible. A
+      ``flat_list`` brand has no per-map keying at all; a service brand whose cache
+      has not refreshed yet has nothing to enumerate; the attribute may not have
+      landed during the boot window. The caller must trust the entity in this case,
+      because rejecting on an empty-because-early set would refuse a VALID id on
+      every restart — a far worse failure than the one [MAP-ANCHOR-1] fixes.
+    - a non-empty set — these are the ids; anything else is not a map id.
+
+    An empty set is normalised to ``None`` for that reason: "I enumerated and found
+    no maps" is indistinguishable here from "I could not enumerate", and the safe
+    reading of both is *do not judge*.
+
+    Defensive throughout — a resolver that raises would break map import for every
+    brand, and this exists only to refuse one bad value.
+    """
+    try:
+        discovery = (config or {}).get("discovery", {}) or {}
+
+        if discovery.get("source") == SOURCE_SERVICE_RESPONSE:
+            cached = get_cached_room_source(hass, vacuum_entity_id)
+            keys = {str(k) for k in cached} if isinstance(cached, dict) else set()
+            return keys or None
+
+        # Attribute source. Only the per-map shape carries map identity; a flat list
+        # is one unkeyed room list and says nothing about which maps exist.
+        if discovery.get("room_list_shape") != SHAPE_PER_MAP_MAPPING:
+            return None
+        attr = discovery.get("room_list_attribute")
+        if not attr or discovery.get("room_list_entity") != "vacuum_entity":
+            return None
+        state = hass.states.get(vacuum_entity_id)
+        rooms = state.attributes.get(attr) if state is not None else None
+        keys = {str(k) for k in rooms} if isinstance(rooms, dict) else set()
+        return keys or None
+    except Exception:  # pragma: no cover - defensive
+        return None
 
 
 def _single_cached_map_id(

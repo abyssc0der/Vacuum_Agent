@@ -28,6 +28,12 @@ Coverage targets
 [RD-15] R25: the outcome depends on the SET of (name, room_id) pairs, not on the
         order the source listed them -- the anchor promises re-discovery of the
         same physical rooms converges on the same identities.
+[RD-ANCHOR-1] MAP-ANCHOR-1/ISSUE #60: an active_map state that matches no map key is
+        REFUSED (None), never accepted as an anchor and never substituted.
+[RD-ANCHOR-2] ...and a state that DOES match still passes through unchanged.
+[RD-ANCHOR-3] ...and when the map set is not enumerable (boot window) no judgement is
+        made at all -- the ablation target: an unconditional check breaks every restart.
+[RD-ANCHOR-4] ...and a flat_list brand is never validated; it carries no map identity.
         a phantom map for a novel device whose sensor hasn't materialised yet).
 """
 
@@ -483,3 +489,71 @@ async def test_rd15_disambiguation_is_order_independent(hass, manager):
     assert by_id_forward == by_id_reverse, (
         f"slug assignment depends on source order: {by_id_forward} vs {by_id_reverse}"
     )
+
+
+# ---------------------------------------------------------------------------
+# [RD-ANCHOR-*] MAP-ANCHOR-1 / ISSUE #60 — the active_map entity's state is only
+# a map id if it looks like one.
+#
+# The reporter's vacuum was `vacuum.apartment_doomba_iii_doomba_iii` while every
+# sibling entity was `doomba_iii_*`, so each derived id missed. He overrode
+# active_map onto `camera.doomba_iii_map` — the entity called "map" — and that
+# camera's state is the map's LAST-UPDATED TIMESTAMP. The resolver returned
+# "2026-10-02 11:04:35" as a map id, it matched nothing, and import refused.
+#
+# The guard DECLINES; it never substitutes. Substituting the single map when the
+# lookup misses is the RP-019/ID-2 failure 17-room-identity.md forbids.
+# ---------------------------------------------------------------------------
+
+def test_rd_anchor_1_value_that_is_not_a_map_id_is_refused(hass, manager):
+    """[RD-ANCHOR-1] THE RED INPUT. A per-map vacuum whose active_map entity reports a
+    value absent from its map keys resolves to None, not to that value.
+
+    Before MAP-ANCHOR-1 this returned the timestamp verbatim and it travelled on into
+    diagnostics as `active_map_id`."""
+    _per_map_adapter()
+    hass.states.async_set("sensor.alfred_map", "2026-10-02 11:04:35")  # a camera's state
+    hass.states.async_set(_VAC, "docked", {"rooms": {
+        "1": [{"id": 1, "name": "Kitchen"}, {"id": 2, "name": "Hall"}],
+    }})
+    assert get_active_map_id(hass, _VAC) is None, (
+        "a value that matches no map key was accepted as a map anchor"
+    )
+
+
+def test_rd_anchor_2_a_real_map_id_still_passes_through(hass, manager):
+    """[RD-ANCHOR-2] The no-op pin. Every install whose selector already reports a real
+    map key must behave EXACTLY as before — this guard is subtractive only."""
+    _per_map_adapter()
+    hass.states.async_set("sensor.alfred_map", "Upstairs")
+    hass.states.async_set(_VAC, "docked", {"rooms": {
+        "Downstairs": [{"id": 1, "name": "Kitchen"}],
+        "Upstairs":   [{"id": 9, "name": "Loft"}],
+    }})
+    assert get_active_map_id(hass, _VAC) == "Upstairs"
+    assert [r["room_id"] for r in discover_rooms_for_vacuum(hass, vacuum_entity_id=_VAC)] == [9]
+
+
+def test_rd_anchor_3_unknowable_map_set_must_not_reject(hass, manager):
+    """[RD-ANCHOR-3] THE ABLATION TARGET, and the reason the guard is conditional.
+
+    Per-map shape, but the room attribute has not landed yet — the boot window. The map
+    set is not enumerable, so NO judgement is possible and the entity must be trusted.
+    Drop the `known is not None` condition and this goes red: a valid map id would be
+    refused on every restart, which is a far worse failure than the one being fixed."""
+    _per_map_adapter()
+    hass.states.async_set("sensor.alfred_map", "Downstairs")
+    hass.states.async_set(_VAC, "docked", {})           # attribute absent entirely
+    assert get_active_map_id(hass, _VAC) == "Downstairs"
+    hass.states.async_set(_VAC, "docked", {"rooms": {}})  # present but empty
+    assert get_active_map_id(hass, _VAC) == "Downstairs"
+
+
+def test_rd_anchor_4_flat_list_brand_is_never_validated(hass, manager):
+    """[RD-ANCHOR-4] Backward-compatibility pin for both shipped brands. A flat_list
+    room source carries no map identity at all, so there is nothing to validate against
+    and the value passes through untouched — however odd it looks."""
+    _discovery_adapter()  # no room_list_shape → flat_list
+    hass.states.async_set("sensor.alfred_map", "2026-10-02 11:04:35")
+    hass.states.async_set(_VAC, "docked", {"segments": [{"id": 4, "name": "Den"}]})
+    assert get_active_map_id(hass, _VAC) == "2026-10-02 11:04:35"
