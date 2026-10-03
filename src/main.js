@@ -2357,12 +2357,43 @@ class EufyVacuumCommandCenter extends HTMLElement {
     const selector = this._buildFocusRestoreSelector(active);
     if (!selector) return null;
 
+    // [FOCUS-UNIQUE-1] ISSUE #60 — a selector is not an identity.
+    //
+    // _buildFocusRestoreSelector returns the FIRST valued data-* attribute, and its
+    // comment justified that with "these are single-instance editors, so a valued
+    // data-* attr or a class selector is unique in the active view". True for the
+    // issue-#37 fields it was written for. NOT true of Setup -> System, which renders
+    // one <select class="evcc-system-picker" data-action="set-entity-override"
+    // data-role="..."> PER ROLE — seventeen of them on the reporter's install. Source
+    // order puts data-action first, and data-action is IDENTICAL on every picker, so
+    // every one of them captured the same selector and restore's querySelector put
+    // focus back on the first. The user saw each dropdown "reset like tabbing to the
+    // first" and could only operate the top one.
+    //
+    // Record WHICH match it was. This fixes the whole class rather than this table:
+    // any control that renders more than once now restores to itself, whatever the
+    // selector builder picks, and a genuinely unique selector is simply index 0 of 1
+    // — unchanged behaviour for every field the old code already handled.
+    //
+    // Deliberately NOT fixed by making the selector smarter (preferring data-role,
+    // appending :nth-of-type): that only moves the guess, and the next control with
+    // two shared data-attrs reopens it.
+    let matchIndex = 0;
+    try {
+      const matches = Array.from(this.shadowRoot?.querySelectorAll(selector) || []);
+      matchIndex = matches.indexOf(active);
+      if (matchIndex < 0) matchIndex = 0;  // defensive: element not found by its own selector
+    } catch (_) {
+      matchIndex = 0;
+    }
+
     const supportsSelection =
       active instanceof HTMLInputElement ||
       active instanceof HTMLTextAreaElement;
 
     return {
       selector,
+      matchIndex,
       selectionStart: supportsSelection ? active.selectionStart : null,
       selectionEnd: supportsSelection ? active.selectionEnd : null,
       selectionDirection: supportsSelection ? active.selectionDirection : null,
@@ -2391,7 +2422,16 @@ class EufyVacuumCommandCenter extends HTMLElement {
   _restoreShadowFocusState(snapshot) {
     if (!snapshot?.selector || !this.shadowRoot) return;
 
-    const target = this.shadowRoot.querySelector(snapshot.selector);
+    // [FOCUS-UNIQUE-1] Restore the match we actually captured, not whichever one
+    // querySelector reaches first. See _captureShadowFocusState.
+    const matches = Array.from(this.shadowRoot.querySelectorAll(snapshot.selector));
+    const index = Number.isInteger(snapshot.matchIndex) ? snapshot.matchIndex : 0;
+    // DECLINE RATHER THAN GUESS when the count changed under us. A re-render that
+    // adds or removes rows makes the captured index meaningless, and focusing the
+    // wrong row is worse than focusing nothing — it is the very bug this fixes. The
+    // single-match case still restores, which is every field issue #37 covered.
+    const target =
+      matches[index] ?? (matches.length === 1 ? matches[0] : null);
     if (!(target instanceof HTMLElement)) return;
 
     target.focus({ preventScroll: true });
