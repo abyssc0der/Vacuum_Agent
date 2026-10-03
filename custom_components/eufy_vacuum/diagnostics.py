@@ -178,8 +178,40 @@ def _self_check(out: dict[str, Any]) -> dict[str, Any]:
     # the live map all work" for exactly those devices, while the importer
     # (get_active_map_id) refused them — the report and the behaviour disagreed.
     active_map_state = str(active_map_role.get("state") or "")
+
+    # [MAP-ANCHOR-1] ISSUE #60 — the second half of the lesson above.
+    #
+    # Rejecting SENTINELS stopped the report claiming "maps, rooms and the live map
+    # all work" for a device sitting at `unavailable`. It did not stop the same claim
+    # for a device whose active_map role is bound to an entity that is not a map
+    # selector at all. The reporter's role was overridden onto `camera.<obj>_map` —
+    # the entity called "map" — and that camera's state is the map's LAST-UPDATED
+    # TIMESTAMP. "2026-10-02 11:04:35" is not a sentinel, so every claim below went
+    # green while the importer refused the device and discoverable_room_count was 0.
+    # The report and the behaviour disagreed again, one level deeper.
+    #
+    # So a state only counts as usable if it NAMES ONE OF THIS VACUUM'S MAPS. The ids
+    # come from the already-collected `maps` block — this function derives everything
+    # from `out` and must not start querying hass.
+    #
+    # ⚠ NO MAPS ENUMERATED MEANS NO JUDGEMENT, not a failure. 39-the-entry-point.md §2
+    # is the scar: a self-check ran before Home Assistant finished starting, read an
+    # empty list, and reported a working install broken — "the matching was never
+    # wrong, the list was empty when it ran". A device that has genuinely never been
+    # mapped also lands here, and `has_rooms` already answers that through its other
+    # terms. Judge only against a map set we actually have.
+    _enumerated_map_ids = {
+        str(_m.get("map_id"))
+        for _m in ((out.get("maps") or {}).get("maps") or [])
+        if isinstance(_m, dict) and _m.get("map_id") is not None
+    }
+    active_map_names_a_real_map = (
+        not _enumerated_map_ids or active_map_state in _enumerated_map_ids
+    )
     active_map_usable = (
-        has_active_map_entity and active_map_state not in _ACTIVE_MAP_SENTINELS
+        has_active_map_entity
+        and active_map_state not in _ACTIVE_MAP_SENTINELS
+        and active_map_names_a_real_map
     )
 
     seg_count = vstate.get("segment_count")
@@ -275,9 +307,17 @@ def _self_check(out: dict[str, Any]) -> dict[str, Any]:
         room_control = "unavailable (no room source detected)"
 
     if active_map_usable:
+        # Core must not speak one brand's words to another brand's owner. This named
+        # the eufy-clean fork unconditionally, so a Dreame owner reading their own
+        # diagnostics was told their backdrop depends on a Eufy integration they do
+        # not have and will never install.
+        _provider = (
+            f"the {brand} integration" if brand
+            else "your vacuum's own integration"
+        )
         map_image = (
-            "active_map sensor present — live-map backdrop available when the "
-            "eufy-clean fork provides a map camera"
+            f"active_map sensor present — live-map backdrop available when "
+            f"{_provider} provides a map camera"
         )
     elif has_active_map_entity:
         map_image = (
@@ -407,7 +447,21 @@ def _self_check(out: dict[str, Any]) -> dict[str, Any]:
     # Present-but-valueless active_map: the importer will refuse this device, so say
     # so loudly instead of letting the reader infer it from a "no" three lines up.
     if has_active_map_entity and not active_map_usable and not discoverable_rooms:
+        # Two causes reach this line and the remedy differs, so name both rather than
+        # asserting the one that used to be the only possibility. A value that is not
+        # a sentinel but names no known map (ISSUE #60) means the ROLE is pointing at
+        # the wrong entity — telling that user "the integration is not providing a map
+        # id" sends them to debug an integration that is working fine.
+        _ids = ", ".join(sorted(_enumerated_map_ids))
+        _mismatch = bool(_enumerated_map_ids) and not active_map_names_a_real_map
         warnings.append(
+            f"active_map entity "
+            f"{active_map_role.get('entity_id') or '(unknown entity)'} reports "
+            f"'{active_map_state or 'no value'}', which is not one of this vacuum's "
+            f"maps ({_ids}) — that role is bound to the wrong entity. It must point "
+            "at the map SELECTOR, not at a camera or anything else whose state is "
+            "not a map id. Rooms cannot be imported until it does."
+            if _mismatch else
             f"active_map entity "
             f"{active_map_role.get('entity_id') or '(unknown entity)'} reports "
             f"'{active_map_state or 'no value'}' — the vacuum integration is not "

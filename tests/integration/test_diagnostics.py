@@ -551,6 +551,83 @@ def test_self_check_active_map_with_real_id_still_healthy():
     assert sc["warnings"] == []
 
 
+def _issue_60_out(maps, *, brand=None):
+    """The reporter's shape, from the real diagnostics on ISSUE #60.
+
+    active_map overridden onto a CAMERA, whose state is the map's last-updated
+    timestamp — not a sentinel, and not a map id. Every other room signal is zero,
+    exactly as his payload had them.
+    """
+    out = {
+        "capabilities": {"supports_room_clean": True, "supports_rooms": True},
+        "entity_resolution": {
+            "active_map": {
+                "entity_id": "camera.doomba_iii_map",
+                "exists": True,
+                "state": "2026-10-02 11:04:35",
+            }
+        },
+        "vacuum_state": {"segment_count": 0},
+        "maps": maps,
+        "managed_rooms_by_map": {},
+        "discoverable_room_count": 0,
+    }
+    if brand:
+        out["adapter"] = {"brand": brand}
+    return out
+
+
+def test_self_check_anchor_1_state_naming_no_map_is_not_healthy():
+    """[DIAG-ANCHOR-1] THE RED INPUT (ISSUE #60).
+
+    Before this, the report said rooms_importable "yes", "maps, rooms and the live
+    map all work", room_control "available (via active map)" and warnings [] — on a
+    vacuum whose import refused and whose room_count was 0 in the same payload. The
+    report and the behaviour disagreed, which is the defect DIAG-14 fixed for
+    sentinels and missed for a value that merely names nothing.
+    """
+    sc = _self_check(_issue_60_out({"maps": [{"map_id": "1", "room_count": 0}]}))
+
+    assert sc["rooms_importable"] == "no", "claimed importable while the importer refuses"
+    assert "all work" not in sc["note"]
+    assert sc["room_control"] != "available (via active map)"
+    assert sc["warnings"], "went green and silent on a device that cannot import"
+    assert any(
+        "camera.doomba_iii_map" in w and "map SELECTOR" in w for w in sc["warnings"]
+    ), "the warning must name the mis-bound role, not blame the vacuum integration"
+
+
+def test_self_check_anchor_2_no_enumerated_maps_means_no_judgement():
+    """[DIAG-ANCHOR-2] THE ABLATION TARGET.
+
+    Same unmatched state, but the maps block is empty — a cold start before the map
+    list has landed, the scar in 39-the-entry-point.md §2 ("the matching was never
+    wrong, the list was empty when it ran"). With nothing to judge against, the
+    check must not fire. Drop the `not _enumerated_map_ids` term and this goes red:
+    every install reporting a map id before its map list loads would read as broken.
+    """
+    sc = _self_check(_issue_60_out({"maps": []}))
+
+    assert sc["rooms_importable"] == "yes"
+    assert sc["note"] == "Standard transport — maps, rooms and the live map all work."
+
+
+def test_self_check_anchor_3_map_image_does_not_name_another_brand():
+    """[DIAG-ANCHOR-3] core must not speak one brand's words to another brand's owner.
+
+    This line named the eufy-clean fork unconditionally, so a Dreame owner reading
+    their own diagnostics was told the backdrop depends on a Eufy integration they
+    will never install.
+    """
+    healthy = _issue_60_out({"maps": [{"map_id": "1", "room_count": 2}]}, brand="dreame")
+    healthy["entity_resolution"]["active_map"]["state"] = "1"  # a real map id
+    sc = _self_check(healthy)
+
+    assert sc["rooms_importable"] == "yes"
+    assert "eufy-clean" not in sc["map_image"], "leaked a brand name to another brand"
+    assert "dreame" in sc["map_image"]
+
+
 def test_self_check_surfaces_area_unit_warning():
     """[DIAG-13] an unrecognized cleaning_area unit (area_units.warning) surfaces as a loud
     warning — the guardrail for a user-toggled or mis-declared unit."""
