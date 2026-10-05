@@ -38,7 +38,11 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers import entity_registry as er
 
-from ..adapters.entity_resolve import resolve_action_entity
+from ..adapters.entity_resolve import (
+    clear_disabled_action_warning,
+    resolve_action_entity,
+    warn_disabled_action_once,
+)
 
 # RP-014: the owned in-flight predicates. `run_is_in_flight` covers dispatched
 # AND app-started runs; its docstring explains why that distinction is
@@ -123,16 +127,25 @@ class DockManager:
             suffixes=action_cfg.get("entity_suffixes", []),
         )
         if _resolved is not None and _status == "resolved":
+            clear_disabled_action_warning(
+                vacuum_entity_id=vacuum_entity_id, kind="dock button", name=action
+            )
             return _resolved
         if _status == "disabled":
             # Deliberately NOT returned. Pressing a disabled entity is the silent
             # log_missing no-op that hid the mop-intensity failure; reporting the
             # action unavailable is the honest answer, and the log names the entity
             # so the user can enable it.
-            _LOGGER.warning(
-                "%s: the %s dock button resolved to %s, which is DISABLED in the "
-                "entity registry — enable it to use this action",
-                vacuum_entity_id, action, _resolved,
+            #
+            # WARN ONCE, for the same reason as the maintenance twin: this resolves on
+            # every build. Fixed in both at once because they were the same defect
+            # written twice [[feedback_partial_guard_blind_spot]].
+            warn_disabled_action_once(
+                vacuum_entity_id=vacuum_entity_id,
+                kind="dock button",
+                name=action,
+                entity_id=_resolved,
+                advice="enable it to use this action",
             )
             return None
 

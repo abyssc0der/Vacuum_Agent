@@ -22,7 +22,12 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers import entity_registry as er
 
-from ..adapters.entity_resolve import resolve_action_entity, sweep_siblings
+from ..adapters.entity_resolve import (
+    clear_disabled_action_warning,
+    resolve_action_entity,
+    sweep_siblings,
+    warn_disabled_action_once,
+)
 from ..const import ENTITY_OVERRIDES_KEY
 from ..core import usage_accumulator
 from ..core.capabilities import MAINTENANCE_CLOCK_ROLE
@@ -334,15 +339,24 @@ class MaintenanceManager:
             suffixes=reset_cfg.get("entity_suffixes", []),
         )
         if _resolved is not None and _status == "resolved":
+            clear_disabled_action_warning(
+                vacuum_entity_id=vacuum_entity_id, kind="reset button", name=component
+            )
             return _resolved
         if _status == "disabled":
             # DISABLED IS NOT MISSING, and it is the common case here: all four of the
             # reporter's reset buttons are disabled in the registry. Returning it would
             # put a Reset control on the card that silently does nothing when pressed.
-            _LOGGER.warning(
-                "%s: the %s reset button resolved to %s, which is DISABLED in the "
-                "entity registry — enable it to reset this consumable from here",
-                vacuum_entity_id, component, _resolved,
+            #
+            # WARN ONCE. This resolver runs on every upkeep build, so an unthrottled
+            # warning gave one reporter four identical lines every few seconds forever
+            # (2026-10-05). The advice is worth saying; it is not worth saying again.
+            warn_disabled_action_once(
+                vacuum_entity_id=vacuum_entity_id,
+                kind="reset button",
+                name=component,
+                entity_id=_resolved,
+                advice="enable it to reset this consumable from here",
             )
             return None
 

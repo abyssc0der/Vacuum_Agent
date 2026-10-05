@@ -1359,3 +1359,87 @@ def test_binding_table_does_not_credit_an_override_that_lost(hass, manager):
     assert row["entity_id"] == "sensor.what_actually_won"
     assert row["overridden"] is False
     assert row["chosen_by"] != "override"
+
+
+async def test_cap_10f_another_brands_vocabulary_is_not_offered(hass, manager, monkeypatch):
+    """[CAP-10f] THE RED INPUT. `detect_capabilities` returns a FIXED dict and emits
+    every key unconditionally, `None` where the probe found nothing — and that
+    vocabulary is EUFY'S: work_mode, dock_status, water_level, robot_position_x/y.
+    Merging it whole put five Eufy roles in the System table of every Roborock, each
+    with a picker, for concepts that brand does not have.
+
+    Not cosmetic: a Roborock owner was offered a `work_mode` picker, chose the
+    sensible-looking `..._status`, and VA then told him his chosen entity was missing
+    while displaying its value. `diagnostics.py` already gates this (live:ENT-BRAND-1)
+    and the binding table did not.
+
+    ⚠ THE SNAPSHOT MUST BE MONKEYPATCHED. The first version of this test registered a
+    bare adapter and asserted the roles were absent — they were, because the fixture's
+    capabilities snapshot has NO `entities` key at all, so the merge loop never ran.
+    It passed against the unfixed code. The gate can only be observed when the probe
+    dict actually carries the foreign roles, which is what this sets up.
+    """
+    hass.states.async_set(_VAC, "docked", {})
+    register_adapter_config(_VAC, {
+        "adapter_id": "test", "source": "test",
+        "entities": {"vacuum": _VAC, "battery": "sensor.alfred_battery"},
+    })
+    monkeypatch.setattr(
+        manager, "get_vacuum_capabilities_snapshot",
+        lambda **_: {
+            "entities": {
+                # Probed AND resolved — belongs in the table whoever found it.
+                "task_status": "sensor.probed_task_status",
+                # Eufy's vocabulary, emitted unconditionally, nothing found.
+                "work_mode": None,
+                "dock_status": None,
+                "water_level": None,
+                "robot_position_x": None,
+                "robot_position_y": None,
+            },
+            "entity_resolution_reasons": {},
+            "entity_sources": {},
+            "entity_augmentation": {},
+        },
+        raising=False,
+    )
+
+    roles = {r["role"] for r in manager._entity_bindings(vacuum_entity_id=_VAC)}
+
+    for foreign in ("work_mode", "dock_status", "water_level",
+                    "robot_position_x", "robot_position_y"):
+        assert foreign not in roles, (
+            f"{foreign!r} is Eufy's vocabulary, this adapter declares none of it, and "
+            "the probe found nothing — offering a picker for it is how a user comes to "
+            "pin an override on a role their brand does not have"
+        )
+    assert "task_status" in roles, (
+        "a PROBED role that RESOLVED must still be listed — the gate is about roles "
+        "that are None AND undeclared, not about who found them"
+    )
+    assert "battery" in roles, "a declared role must still be listed"
+
+
+async def test_cap_10g_a_declared_role_survives_even_when_unresolved(hass, manager, monkeypatch):
+    """[CAP-10g] The complement, so the gate cannot be over-applied. A role THIS
+    adapter declares belongs in the table whether or not it resolved — that is the
+    difference between "your battery sensor is missing" and silence."""
+    hass.states.async_set(_VAC, "docked", {})
+    register_adapter_config(_VAC, {
+        "adapter_id": "test", "source": "test",
+        "entities": {"vacuum": _VAC, "dock_status": "binary_sensor.alfred_dock"},
+    })
+    monkeypatch.setattr(
+        manager, "get_vacuum_capabilities_snapshot",
+        lambda **_: {
+            "entities": {"dock_status": None},
+            "entity_resolution_reasons": {"dock_status": "absent"},
+            "entity_sources": {}, "entity_augmentation": {},
+        },
+        raising=False,
+    )
+
+    roles = {r["role"] for r in manager._entity_bindings(vacuum_entity_id=_VAC)}
+    assert "dock_status" in roles, (
+        "the adapter DECLARES this role — dropping it would hide a real failure"
+    )

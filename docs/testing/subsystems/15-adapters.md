@@ -32,6 +32,31 @@ as a third shipped brand. -->
 Source: `custom_components/eufy_vacuum/adapters/`
 Architecture reference: [22 — The Adapter Contract](../../dev/22-adapter-contract.md)
 
+### `test_disabled_action_warn_once.py` — advice that repeats is noise with a severity
+
+`resolve_action_entity` can answer **disabled**, which is a toggle in the user's own UI
+rather than a fault of ours. Both consumers — `maintenance/manager.py` for consumable
+reset buttons and `dock/manager.py` for dock actions — decline to return a disabled
+entity and say so in the log, because pressing one is the silent `log_missing` no-op that
+`INR2F03P` exists to prevent.
+
+They resolve on **every** upkeep/snapshot rebuild, a few seconds apart, and neither
+throttled. A Roborock owner with all four consumable reset buttons disabled got four
+identical WARNING lines every few seconds, indefinitely (reported 2026-10-05, with the log
+pasted; issue #57 had closed on the same symptom, so this was the half left behind).
+
+`warn_disabled_action_once` is keyed `(vacuum, kind, name)` — bounded by construction,
+never per value — and is cleared on a clean resolution, so the user enabling the entity
+and later disabling it again is reported afresh. A warn-once that never forgets is
+indistinguishable from a warning somebody deleted.
+
+What the tests pin, beyond the count: the throttle is **per component** (four disabled
+buttons must yield four warnings, not one — throttling per vacuum would have told that
+reporter about one and hidden three), **per vacuum**, and the message names both the
+entity and the remedy. [WOD-5] does not depend on the throttle, so it stays green when the
+throttle is ablated — which is how you tell the other four are testing the throttle and
+not the text.
+
 ### `test_entity_resolve.py` — when a DERIVED entity id does not match the install
 
 Adapters build companion entity ids from the vacuum's object_id
@@ -524,7 +549,7 @@ filter weakened to a type check would report it as a clean order continuously.
 | `config_loader.py` | 33 | 100% | `test_adapters.py` | integration | clean |
 | `config_schema.py` | 64 | 94% | `test_adapters.py` | integration | clean |
 | `brands.py` | 45 | 100% | `test_brand_selection.py` | integration | clean |
-| `entity_resolve.py` | 193 | 92% | `tests/unit/test_entity_resolve.py` + `tests/adapters/test_entity_resolve.py` | unit + adapter | clean |
+| `entity_resolve.py` | 193 | 92% | `tests/unit/test_entity_resolve.py` + `tests/adapters/test_entity_resolve.py` + `tests/unit/test_disabled_action_warn_once.py` | unit + adapter | clean |
 | `eufy/segmentor.py` | 872 | 92% | `tests/adapters/eufy/` | adapter | - |
 | `eufy/adapter.py` | 61 | 85% | `tests/adapters/eufy/` | adapter | - |
 | `eufy/entities.py` | 29 | 100% | `test_buttons_entities.py` + `test_suffix_vocabulary.py` | adapter | clean |

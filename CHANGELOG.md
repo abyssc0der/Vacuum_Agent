@@ -20,6 +20,10 @@ Everything here came out of v2.2.2 reaching real multi-map installs within hours
 
 ### Fixed
 
+- **Setup → System offered settings for another brand's hardware.** On a Roborock the table listed `work_mode`, `dock_status`, `water_level` and the robot's X/Y position — Eufy concepts that Roborock has no equivalent for — each with a full entity picker. One owner reasonably filled one in, and Vacuum Agent then told him his chosen entity was missing while displaying that entity's current value two lines above. Those roles are no longer offered on a brand that has no such concept, and an entity you pin by hand is now honoured for any role rather than only the ones the brand already searches for.
+
+- **Four identical warnings every few seconds, forever, if a consumable reset button was disabled.** Vacuum Agent checks whether it can offer a Reset control each time it rebuilds the maintenance view — every few seconds — and when the button it found was disabled in Home Assistant it said so in the log every single time. One reporter had all four of his reset buttons disabled, so his log filled with the same four lines indefinitely. The advice is worth giving once; it is now given once per button, and again only if the button is disabled a second time after being enabled. The identical problem in the dock action buttons is fixed at the same time.
+
 - **Switching maps did not change the rooms on screen.** The selector changed, the warning about the selection not matching stayed up, and the Rooms section kept showing the previous map's rooms. The card worked out which map it was displaying by looking for an entity named after Eufy's convention, and when that was absent — which it always is on Roborock and Dreame — it fell back to reading the map id off whichever room it happened to encounter first. That is arbitrary, so it answered with whichever map had been enumerated first regardless of which one was active. It now uses the map the integration has already resolved.
 
   This one only became visible in v2.2.2. Before that there was no way to switch maps on those brands, so the card's confusion had nowhere to show.

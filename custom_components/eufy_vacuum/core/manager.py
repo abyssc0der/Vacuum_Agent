@@ -5695,8 +5695,28 @@ class EufyVacuumManager:
                 # the table — otherwise task_status, the role that tells the card
                 # what the vacuum is DOING, would be missing from the one screen
                 # built to show what we read.
+                #
+                # ⚠ BUT ONLY IF IT RESOLVED. `detect_capabilities` returns a FIXED
+                # dict and emits EVERY key unconditionally, `None` where the probe
+                # found nothing — and that vocabulary is EUFY'S: work_mode,
+                # dock_status, water_level, robot_position_x/y. Merging it whole
+                # put five Eufy roles in the System table of every Roborock, each
+                # with a 54-option picker, for concepts that brand does not have.
+                # `diagnostics.py` already gates exactly this (live:ENT-BRAND-1) and
+                # this copy did not.
+                #
+                # It is not cosmetic: a user filled one in. Offered a `work_mode`
+                # picker on a Saros 20, he chose the sensible-looking
+                # `..._status`, and VA then told him his chosen entity was missing
+                # while displaying its value — because an override is only honoured
+                # for a role that HAS a candidate list, and this one never did.
+                # Reported 2026-10-05.
+                #
+                # A role that resolved is real whoever probed it; a role that is
+                # None and undeclared is another brand's word.
                 for role, entity_id in (caps.get("entities") or {}).items():
-                    entities.setdefault(role, entity_id)
+                    if entity_id or role in entities:
+                        entities.setdefault(role, entity_id)
         except Exception:  # pragma: no cover - defensive
             _LOGGER.debug(
                 "entity bindings: capabilities unavailable for %s",

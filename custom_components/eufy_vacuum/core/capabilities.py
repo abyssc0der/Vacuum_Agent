@@ -653,7 +653,24 @@ def augment_candidates_from_device(
     applied_overrides: dict[str, str] = {}
     origins: dict[str, dict[str, str]] = {}
     base: dict[str, list[str]] = {}
-    for _role, _declared in cands.items():
+    # EVERY role with an override, not only the ones that already have candidates.
+    #
+    # ⚠ THIS ITERATED `cands` ALONE, and an override on a role absent from it was
+    # silently dropped. `_find` then resolved from an empty list, found nothing, saw
+    # `entity_id != wanted` and reported `override_unresolved` — "your chosen entity is
+    # missing" — about an entity that existed and was reporting a value. Meanwhile
+    # `_entity_bindings` reads the DECLARED map, where the same override had been
+    # applied, and labelled the row `chosen_by: override`. One row asserting both,
+    # because two paths answered the same question and only one could see the override.
+    # Traced 2026-10-05 from a Roborock whose `work_mode` override pointed at a live
+    # `sensor..._status`.
+    #
+    # live:ENT-7 says a user's explicit choice outranks derivation; it cannot do that
+    # from outside the list the resolver reads.
+    for _role in list(cands.keys()) + [
+        r for r in user_overrides if r not in cands
+    ]:
+        _declared = cands.get(_role)
         _list = list(_declared or [])
         origins[_role] = {item: FROM_DERIVED for item in _list if isinstance(item, str)}
         _override = user_overrides.get(_role)

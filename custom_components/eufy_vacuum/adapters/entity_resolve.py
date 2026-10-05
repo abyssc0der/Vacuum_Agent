@@ -289,6 +289,48 @@ def sibling_translation_keys(registry: Any, siblings: "Iterable[str]") -> dict[s
 # [[feedback_claim_must_be_able_to_bite]]. ADD IT HERE if a device-class-bearing role
 # ever reaches these two; `ROLE_DEVICE_CLASSES` is the list of roles that would care.
 # `python scripts/doc_anchor.py --show RNF2RCXP` lists every site.
+#: Warn-once bookkeeping for a DISABLED action entity, keyed (vacuum, kind, name).
+#:
+#: ⚠ THE WARNING THIS THROTTLES RAN ON EVERY REBUILD. `maintenance/manager.py` and
+#: `dock/manager.py` both resolve an action entity on every upkeep/snapshot build -- a few
+#: seconds apart -- and both logged at WARNING when the resolved button was disabled, with
+#: no throttle in either. A Roborock owner with four disabled consumable reset buttons got
+#: four identical warnings every few seconds, indefinitely. Reported 2026-10-05 with the
+#: log pasted; issue #57 had closed on the same symptom, so this is the half that was left.
+#:
+#: BOUNDED BY CONSTRUCTION: one entry per vacuum+kind+name, never per value -- the same
+#: shape as `rooms/room_discovery._MISBOUND_ACTIVE_MAP_WARNED` and for the same reason.
+#: Cleared on a clean resolution so a LATER regression is reported rather than swallowed:
+#: the user enables the entity, we forget, and if it is disabled again they are told again.
+_DISABLED_ACTION_WARNED: set[tuple[str, str, str]] = set()
+
+
+def warn_disabled_action_once(
+    *, vacuum_entity_id: str, kind: str, name: str, entity_id: str | None, advice: str
+) -> None:
+    """Log ONCE that an action entity resolved but is disabled in the registry.
+
+    A disabled entity is a toggle in the user's own UI, not a fault of ours, so the
+    message is advice -- and advice repeated every few seconds is a log nobody reads.
+    """
+    key = (vacuum_entity_id, kind, name)
+    if key in _DISABLED_ACTION_WARNED:
+        return
+    _DISABLED_ACTION_WARNED.add(key)
+    _LOGGER.warning(
+        "%s: the %s %s resolved to %s, which is DISABLED in the entity registry — %s "
+        "(logged once; it will log again if this recurs after the entity is enabled)",
+        vacuum_entity_id, name, kind, entity_id, advice,
+    )
+
+
+def clear_disabled_action_warning(
+    *, vacuum_entity_id: str, kind: str, name: str
+) -> None:
+    """Forget a disabled-entity warning, so a later regression is reported afresh."""
+    _DISABLED_ACTION_WARNED.discard((vacuum_entity_id, kind, name))
+
+
 def resolve_action_entity(
     hass: HomeAssistant,
     registry: Any,
