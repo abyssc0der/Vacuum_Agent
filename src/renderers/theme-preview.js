@@ -461,7 +461,10 @@ export function applyThemePreviewRenderers(proto) {
     // built-in "unknown animal" fallback — itself a useful signal.
     const animals = (window.AnimalSVG && window.AnimalSVG.list)
       ? window.AnimalSVG.list()
-      : ["cat", "dog", "raccoon", "parrot", "snake"];
+      // REPLICA RNR60SN8 — kept in step with the other three copies, though NOTHING
+      // here can observe the difference: the next line reads only "cat", which is always
+      // present. Listed as a replica so the set is findable, not because it was broken.
+      : ["cat", "dog", "fox", "raccoon", "parrot", "snake"];
     const representative = animals.includes("cat") ? "cat" : animals[0];
     return this._renderAnimalPreviewGrid(
       representative ? [representative] : [],

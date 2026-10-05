@@ -78,7 +78,7 @@ from ..const import (
 from ..jobs import stuck_watch
 from ..learning.utils import read_cleaning_area_m2
 from .run_state import is_non_cleaning_vacuum_state
-from ..entity_helpers import get_floor_type_label
+from ..entity_helpers import get_floor_type_label, is_blank_state
 from ..jobs.job_monitor import (
     build_job_metadata_from_payload,
     build_start_blocker_from_lifecycle,
@@ -6342,8 +6342,23 @@ class EufyVacuumManager:
         stays stale indefinitely; can't be forced on demand). Any screen→device
         coordinate op — zone drawing, map-tap room select — lands wrong in that window.
 
-        Detection: watch the fork's Active Map sensor (numeric id → rename-proof) for a
-        change = a switch happened (from the card, the fork entity, OR the Eufy app).
+        Detection: watch the DECLARED ``entities.active_map`` role for a change = a switch
+        happened (from the card, the brand's own entity, OR the vendor app).
+
+        ⚠ THIS READ WAS HARDCODED TO ``sensor.{object_id}_active_map`` UNTIL ISSUE #61,
+        which is Eufy's shape and only Eufy's. Roborock and Dreame declare a ``select``,
+        so the gate never armed for them — and the same issue gave both of those brands
+        the map switcher, which would have handed them the control without the pause that
+        makes it safe. Reading the role instead also picks up the localized-id rescue and
+        any user entity override, neither of which a derived id can see (the same flaw
+        ``_raw_robot_position`` documents one method along). Eufy is unaffected: its
+        declared role resolves to exactly the id that was hardcoded here.
+
+        One behavioural difference worth stating: Eufy's token is a numeric map id, so it
+        is rename-proof. Roborock and Dreame report a map NAME, so RENAMING the active map
+        reads as a switch and arms the gate. That is a false arm, and it errs toward
+        pausing zone drawing when nothing moved — the safe direction, and it clears on the
+        robot's next move like any other arm.
         Clear once the robot's raw position moves past ``_POSE_MOVE_THRESHOLD_RAW`` OR it
         enters a cleaning/returning state (== it moved == re-localized). The
         ``acknowledge_map_frame`` override force-clears until the NEXT switch. On cold
@@ -6356,10 +6371,16 @@ class EufyVacuumManager:
         obj = vacuum_entity_id.split(".", 1)[-1]
         gate = self._map_frame_gate.setdefault(vacuum_entity_id, {})
 
-        active_state = self.hass.states.get(f"sensor.{obj}_active_map")
+        _active_entity = (
+            (_get_adapter_config(vacuum_entity_id) or {}).get("entities", {}) or {}
+        ).get("active_map") or f"sensor.{obj}_active_map"
+        active_state = self.hass.states.get(_active_entity)
         active_token = active_state.state if active_state is not None else None
         # No usable active-map signal → can't track a switch; treat as grounded.
-        if active_token in (None, "unknown", "unavailable", ""):
+        # `is_blank_state` rather than a re-listed tuple: it is THE question ("did we get a
+        # value?"), and a caller that re-lists the members drifts from it. The tuple here
+        # was already one member short of the shared set.
+        if is_blank_state(active_token):
             return False, None
 
         last_token = gate.get("last_active_map")

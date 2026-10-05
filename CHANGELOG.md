@@ -10,19 +10,31 @@ only.
 
 ## [Unreleased]
 
-Four of these came out of [#61](https://github.com/kingchddg901/Vacuum_Agent/issues/61) — thanks to **@mactron254** for the report, the entity list and the diagnostics, which is what made the second and third findable at all. The fifth surfaced on a live box while verifying the others.
+## [2.2.2] - 2026-10-04
 
-> **These are backend changes, so they need a full Home Assistant restart**, not just a browser refresh. The card is unchanged.
+Most of these came out of [#61](https://github.com/kingchddg901/Vacuum_Agent/issues/61) — thanks to **@mactron254** for the report, the entity list and the diagnostics, without which the battery and estimate problems below would not have been findable at all. Two more surfaced on a live box and in a pre-release audit while the others were being verified.
+
+> **This release changes both the integration and the card, so it needs a full Home Assistant restart** rather than only a browser refresh. The card bundle carries a fingerprint that the restart re-registers, so there is no version string to bump by hand — though a hard refresh (Ctrl+Shift+R) is worth trying if anything still looks stale.
 
 ### Fixed
 
+- **The fox was missing from the theme-token reference, and from the companion picker before the card finished loading.** Per-animal tokens are derived from a roster that is hardcoded in four places as a fallback, and those copies went stale when the fox shipped. In a loaded card the live roster wins, so the fox's 14 tokens were there and themeable — but the generated reference documentation listed none of them, and for the moment before the animal bundle lands the fox was not selectable in the companion picker. All four copies now carry it; the reference gains the fox's 14 tokens.
+
+  Mittens is deliberately still excluded from all four, for two different reasons. On the token side her absence is the protection: she is a memorial portrait with her colours baked into the artwork, and the one colour she exposes is her eye. In the picker she belongs — but on that same cold path her memorial status cannot be read, so she would appear as an ordinary animal outside the Rainbow Bridge group. Briefly absent beats briefly mis-grouped.
+
 - **No floor/map switcher in the header on Roborock and Dreame.** If you had more than one map, Vacuum Agent would notice when you changed floors and warn you that your selection no longer matched the vacuum's active map — and then give you no control to do anything about it. You stayed stuck on the first map you imported.
 
-  The switcher was looked up by a naming convention that belongs to the eufy-clean fork, so only Eufy ever had one. It now uses the Active Map role you already configured, which means it works on any brand that has one. Nothing changes for Eufy, whose own active-map entity is read-only and still resolves the old way.
+  The switcher was looked up by a naming convention that belongs to the eufy-clean fork, so only Eufy ever had one. It now uses the Active Map role you already configured, which means it works on any brand that declares one as a selector. Nothing changes for Eufy, whose own active-map entity is read-only and still resolves the old way.
+
+  The safety pause that comes with it was fixed at the same time: after switching floors the robot's coordinates are still on the old map until it next moves, so zone drawing and tap-to-select are paused until then. That pause was also keyed to Eufy's entity, so the two brands that just gained the switcher would have got the control without it. One caveat on those brands: they report a map *name* rather than a number, so renaming the active map reads as a switch and pauses drawing until the robot moves.
+
+  The switcher also no longer requires a live-map image to appear, since switching which floor you are looking at does not depend on having a map backdrop. If you have several maps and no map camera configured, this control is new to you.
 
 - **Battery and charging did not resolve if your entities are not in English.** Home Assistant builds an entity's id from its *translated* name when it is first created, so on a Spanish, German or French install the ids share nothing with the English ones we look for. We already recovered from that by matching the integration's own internal key — but Roborock sets no key on battery or charging, so those two kept failing.
 
   They are now also matched on the device class the integration declares, which is neither translated nor brand-specific. One consequence of them failing was invisible: charging state has no fallback by design, so a charging robot simply read as "not charging" forever, with nothing in the log.
+
+  If your dock publishes its own battery sensor, the match is deliberately refused rather than guessed — reporting the dock's charge as the robot's would be wrong data rather than missing data. Set an entity override for the battery role if that happens to you.
 
 - **Room time estimates silently disappeared when the battery could not be read.** The estimate code treated an unreadable battery as a number, threw, and caught its own error — so every room came back with no estimate and the only sign was a repeating traceback in the log. The battery is informational there, so the estimates now come through without it.
 

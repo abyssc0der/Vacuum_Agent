@@ -94,7 +94,14 @@ const STATIC_AFTER_ANIMALS = [
    'animal-svg-registered'.
    ========================================================= */
 
-// anchor: RNR60SN8  the bundled animal roster — the replica set
+// anchor: RNR60SN8  the bundled animal roster — the replica set, FOUR copies
+//
+// ⚠ THIS ANCHOR SAID TWO COPIES AND THERE ARE FOUR. It was minted repairing this file and
+// theme-preview-registry.js, and a pre-release audit then found the same stale roster in
+// src/renderers/map.js (the companion picker — so the fox was still unselectable on the
+// cold path) and src/renderers/theme-preview.js (inert; it reads only "cat"). An anchor is
+// a claim about completeness and this one was wrong the day it was minted. Grep the
+// LITERAL before trusting the anchor. See docs/dev/00c-replicas.md.
 //
 // Used only when window.AnimalSVG has not loaded yet: the generated-docs build (node,
 // no window) and the first render before the bundle lands. The LIVE list wins whenever

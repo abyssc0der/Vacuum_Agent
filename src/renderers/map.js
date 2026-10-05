@@ -717,7 +717,19 @@ export function applyMapRenderers(proto) {
           aria-label="${this.t("rooms.companion_animal")}"
         >
           ${(() => {
-            const list    = window.AnimalSVG?.list?.() ?? ["cat","dog","raccoon","parrot","snake"];
+            // REPLICA RNR60SN8 — the bundled animal roster. Four copies; the twin that
+            // carries the reasoning is src/theme-tokens/index.js. Used only before
+            // animal-svg loads, so a stale entry is invisible in a warm browser and the
+            // fox was missing here for the whole cold-paint window.
+            //
+            // ⚠ MITTENS STAYS OUT, for a DIFFERENT reason than on the token path. She is
+            // selectable and belongs in this picker — but the memorial split below asks
+            // `window.AnimalSVG?.get?.(a)?.memorial`, and on THIS path AnimalSVG is not
+            // loaded, so every get() is undefined and she would sort into `regular`:
+            // listed as an ordinary animal, outside the 🌈 Rainbow Bridge group that
+            // exists precisely to not do that. Briefly absent is better than briefly
+            // mis-grouped, and the live roster adds her a moment later.
+            const list    = window.AnimalSVG?.list?.() ?? ["cat","dog","fox","raccoon","parrot","snake"];
             const current = state.mapAnimalSelection?.() ?? "cat";
             const opt = (a) => {
               const def   = window.AnimalSVG?.get?.(a);

@@ -238,12 +238,35 @@ the `constant` rung, the top of the ladder. This records the set until then.
 
 ---
 
-### `RNR60SN8` — the bundled animal roster · **2 copies**
+### `RNR60SN8` — the bundled animal roster · **4 copies**
 
-`src/theme-tokens/index.js` decides which per-animal theme tokens EXIST;
-`src/renderers/theme-preview-registry.js` decides which animals the theme editor PREVIEWS.
-Both hold the same hardcoded roster, used only when `window.AnimalSVG` has not loaded —
+| Copy | Decides |
+|---|---|
+| `src/theme-tokens/index.js` | which per-animal theme tokens EXIST |
+| `src/renderers/theme-preview-registry.js` | which animals the theme editor PREVIEWS |
+| `src/renderers/map.js` (companion picker) | which animals are SELECTABLE |
+| `src/renderers/theme-preview.js` | the parent-group representative — inert, see below |
+
+All hold the same hardcoded roster, used only when `window.AnimalSVG` has not loaded —
 the generated-docs build (node, no window) and the first render before the bundle lands.
+
+⚠ **THE SET WAS DECLARED AT TWO AND IS FOUR.** The fox fix (`2e0bce1e`) minted this anchor
+while repairing the first two, and a pre-release audit found the other two still stale — so
+the fox was missing from the companion picker's cold-path list after the commit that said it
+was fixed. An anchor is a claim about completeness, and this one was wrong on the day it was
+minted: the `RNF2RCXP` shape, in a fresh replica set. Grep the literal, not the anchor.
+
+The fourth copy is **inert and listed anyway**: `theme-preview.js` reads only `"cat"` from
+its list, which is always present, so no input can make it behave differently. It is here so
+the set is findable, not because it can break.
+
+**Mittens is absent from all four, for TWO different reasons.** On the token paths her
+absence is the protection: `declaredColorSuffixes()` returns null without AnimalSVG and the
+documented default is "show the full catalog", so listing her publishes 14 tokens including
+FUR for a memorial animal. On the picker path the reason is different — she belongs in the
+list, but the memorial split reads `AnimalSVG.get(a).memorial`, which is undefined on exactly
+this path, so she would render as an ordinary animal outside the 🌈 Rainbow Bridge group.
+Briefly absent beats briefly mis-grouped.
 
 **Why it drifts silently.** The live roster wins whenever it exists, so a stale copy is
 invisible in a warm browser and wrong everywhere else. Fox shipped and neither copy was

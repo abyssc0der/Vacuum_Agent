@@ -28,6 +28,9 @@ Coverage
          sibling and no camera at all (Roborock/Dreame).
 [MSW-12] a declared active_map SENSOR (Eufy) is never bound as the switcher.
 [MSW-13] the declared select loses to nothing: when it has no state, rung 2 still runs.
+[MSW-14] the post-switch frame gate watches the DECLARED active_map role, so it arms on
+         a brand whose role is a select (Roborock/Dreame), not only on Eufy's sensor.
+[MSW-15] Eufy is unaffected: its declared role IS the id the gate used to hardcode.
 """
 
 from __future__ import annotations
@@ -274,3 +277,53 @@ async def test_msw13_declared_select_without_state_falls_through_to_the_fork(
     )
 
     assert out is not None and out["entity_id"] == sel_id
+
+
+async def test_msw14_frame_gate_arms_on_a_select_based_active_map(hass, manager):
+    """[MSW-14] issue #61, found by the pre-release audit.
+
+    The gate hardcoded `sensor.{object_id}_active_map` -- Eufy's shape and only Eufy's.
+    Roborock and Dreame declare a `select`, so the gate NEVER armed for them. The same
+    issue handed both of those brands the map switcher, which would have given them the
+    control without the pause that makes it safe: after a switch the robot's coordinate
+    frame is still on the old map, so a zone drawn before it next moves lands wrong.
+
+    Reading the declared role also picks up the localized-id rescue and any user entity
+    override, neither of which a derived id can see.
+    """
+    vac = "vacuum.gate14"
+    register_adapter_config(
+        vac,
+        {"adapter_id": "roborock", "source": "code",
+         "entities": {"active_map": "select.gate14_selected_map"}},
+    )
+    _set_pose(hass, "gate14", 100, 100)
+    hass.states.async_set("select.gate14_selected_map", "Comedor",
+                          {"options": ["Comedor", "Habitaciones"]})
+    # First observation: no prior token to compare against -> grounded.
+    assert manager._compute_map_frame_gate(vacuum_entity_id=vac) == (False, None)
+
+    hass.states.async_set("select.gate14_selected_map", "Habitaciones",
+                          {"options": ["Comedor", "Habitaciones"]})
+    assert manager._compute_map_frame_gate(vacuum_entity_id=vac) == (True, "map_switched"), (
+        "a select-based active_map must arm the gate"
+    )
+    # Still docked, still un-grounded.
+    assert manager._compute_map_frame_gate(vacuum_entity_id=vac) == (True, "map_switched")
+
+
+async def test_msw15_eufy_frame_gate_is_unchanged_by_the_role_read(hass, manager):
+    """[MSW-15] The safety property for MSW-14's change. Eufy declares
+    `sensor.{object_id}_active_map` -- byte-identical to the id the gate hardcoded -- so
+    routing through the role must leave Eufy's behaviour exactly as it was."""
+    vac = "vacuum.gate15"
+    register_adapter_config(
+        vac,
+        {"adapter_id": "eufy", "source": "code",
+         "entities": {"active_map": "sensor.gate15_active_map"}},
+    )
+    _set_active_map(hass, "gate15", "6")
+    _set_pose(hass, "gate15", 100, 100)
+    assert manager._compute_map_frame_gate(vacuum_entity_id=vac) == (False, None)
+    _set_active_map(hass, "gate15", "7")
+    assert manager._compute_map_frame_gate(vacuum_entity_id=vac) == (True, "map_switched")
