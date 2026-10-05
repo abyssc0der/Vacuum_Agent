@@ -166,7 +166,24 @@ export function applySetupBindings(proto) {
       card._scheduleRender();
 
       try {
-        const result = await card._actions.setMapCamera?.(vacuumEntityId, entityId);
+        // SCOPE IT TO THE MAP, but only when there is more than one.
+        //
+        // The override is consulted for EVERY map, so on a multi-map vacuum a single
+        // value pins them all to one backdrop — the bug this fixes. With one map the two
+        // are indistinguishable, so a single-map install keeps writing the per-vacuum
+        // value and nothing about it changes.
+        //
+        // The per-vacuum value also remains the fallback for any map without an entry of
+        // its own, so choosing a camera for one floor never blanks another.
+        const _status = card._state.setupStatus?.() ?? null;
+        const _vacs = Array.isArray(_status?.vacuums) ? _status.vacuums : [];
+        const _entry = _vacs.find((v) => v?.vacuum_entity_id === vacuumEntityId) ?? null;
+        const _imported = (_entry?.maps ?? []).filter((m) => m?.imported);
+        const _mapId = _imported.length > 1 ? card._state.activeMapId?.() : null;
+
+        const result = await card._actions.setMapCamera?.(
+          vacuumEntityId, entityId, _mapId,
+        );
         card._state.setSetupLastResult?.(result);
         const statusResult = await card._actions.getSetupStatus?.();
         card._state.setSetupStatus?.(statusResult);

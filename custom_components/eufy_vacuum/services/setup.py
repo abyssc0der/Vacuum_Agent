@@ -53,6 +53,7 @@ import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 
+from ..entity_helpers import normalize_map_id
 from ..const import (
     DATA_RUNTIME,
     DOMAIN,
@@ -118,6 +119,10 @@ _SETUP_SET_MAP_CAMERA_SCHEMA = vol.Schema(
         # (not cv.entity_id) so "" is accepted as the clear sentinel; the resolver
         # existence-checks whatever is stored.
         vol.Optional("entity_id", default=""): cv.string,
+        # PER-MAP when supplied, per-vacuum when omitted. A multi-map vacuum needs one
+        # camera PER MAP -- the per-vacuum override predates multi-map support and, being
+        # checked first and unconditionally, pinned every map to a single backdrop.
+        vol.Optional("map_id", default=""): cv.string,
     }
 )
 _SETUP_IMPORT_MAP_SCHEMA = vol.Schema(
@@ -628,19 +633,37 @@ def register(hass: HomeAssistant) -> None:
             }
 
         raw_entity = str(call.data.get("entity_id") or "").strip()
-        if raw_entity:
+        raw_map = normalize_map_id(call.data.get("map_id") or "")
+
+        if raw_map:
+            # PER-MAP, stored under its own key so the per-vacuum value keeps meaning
+            # exactly what it meant before. `_resolve_live_map_image` prefers a per-map
+            # entry and keeps the per-vacuum one as the fallback for maps that have
+            # none, so this is additive: no existing override changes behaviour and
+            # nothing needs migrating.
+            by_map = record.setdefault("live_map_image_entity_by_map", {})
+            if raw_entity:
+                by_map[raw_map] = raw_entity
+            else:
+                by_map.pop(raw_map, None)
+                if not by_map:
+                    record.pop("live_map_image_entity_by_map", None)
+        elif raw_entity:
             record["live_map_image_entity"] = raw_entity
         else:
             record.pop("live_map_image_entity", None)  # blank -> fall back to pattern
         await manager.async_save()
+
+        _scope = f" for map '{raw_map}'" if raw_map else ""
         return {
             "status": "success",
             "message": (
-                f"Live-map camera set to '{raw_entity}'."
+                f"Live-map camera set to '{raw_entity}'{_scope}."
                 if raw_entity
-                else "Live-map camera override cleared."
+                else f"Live-map camera override cleared{_scope}."
             ),
             "vacuum_entity_id": vacuum_entity_id,
+            "map_id": raw_map or None,
             "live_map_image_entity": raw_entity or None,
         }
 

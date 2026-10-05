@@ -4040,7 +4040,8 @@ setup_set_map_camera:
   description: >
     Override which image or camera entity the dashboard snapshot uses as the
     live-map backdrop for this vacuum. The value is stored on the managed-vacuum
-    record as live_map_image_entity and is preferred over the adapter's default
+    record as live_map_image_entity (or, with map_id, under
+    live_map_image_entity_by_map) and is preferred over the adapter's default
     live_map_image_entity_pattern the next time the snapshot is drawn — no
     reload is needed.
     Leave entity_id blank (or omit it) to CLEAR the override and fall back to
@@ -4060,6 +4061,18 @@ setup_set_map_camera:
         clears the override. Defaults to blank (clear).
       required: false
       example: camera.alfred_live_map
+      selector:
+        text: {}
+    map_id:
+      name: Map
+      description: >
+        Scope the override to ONE map. Omit it to set the per-vacuum override, which is
+        what this service always did and which still applies to every map with no entry
+        of its own. A multi-map vacuum needs one backdrop per map: the per-vacuum value
+        is checked for every map, so on its own it pins them all to a single camera. A
+        blank entity_id plus a map_id clears just that map's entry.
+      required: false
+      example: "Main floor"
       selector:
         text: {}
 

@@ -6481,6 +6481,23 @@ class EufyVacuumManager:
         )
         mapping_cfg = adapter_cfg.get("mapping", {}) or {}
         vac_record = self.data.get("vacuums", {}).get(vacuum_entity_id, {}) or {}
+
+        # PER-MAP FIRST. This method TAKES a map_id and the override ignored it: a single
+        # per-vacuum value was checked first and unconditionally, so one pinned camera
+        # served every map. On a multi-map vacuum that is not a preference, it is a
+        # wrong backdrop — and the user who found it had been re-pointing this override
+        # by hand before each import, which is the bug's shape reflected back at him.
+        #
+        # ADDITIVE: the per-vacuum value keeps its exact meaning as the fallback for maps
+        # with no entry of their own, so no existing install changes and nothing migrates.
+        # It is also the honest fallback — it is what the user last chose, and for a
+        # single-map vacuum it is still simply right.
+        _by_map = vac_record.get("live_map_image_entity_by_map") or {}
+        if isinstance(_by_map, dict) and map_id is not None:
+            _for_this_map = _by_map.get(normalize_map_id(map_id))
+            if _for_this_map and self.hass.states.get(_for_this_map) is not None:
+                return _for_this_map
+
         override = vac_record.get("live_map_image_entity")
         if override and self.hass.states.get(override) is not None:
             return override

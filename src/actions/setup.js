@@ -87,11 +87,27 @@ export function applySetupActions(proto) {
    * entity override — the entity used as the Map view's live backdrop. Blank clears
    * the override (falls back to the adapter pattern). Returns an ActionResult or null.
    */
-  proto.setMapCamera = async function (vacuumEntityId, entityId) {
+  proto.setMapCamera = async function (vacuumEntityId, entityId, mapId = null) {
+    // `mapId` scopes the override to ONE map. Omitted, this writes the per-vacuum
+    // override exactly as it always did — still right for a single-map vacuum, and the
+    // fallback for any map without an entry of its own.
+    //
+    // A multi-map vacuum needs one backdrop PER MAP: the per-vacuum value is consulted
+    // for every map, so on its own it pins them all to one camera. The user who found
+    // that had been re-pointing this override by hand before each import.
+    //
+    // ⚠ THREE LAYERS, and this is the one that fails quietly. A param the service
+    // declares but this wrapper omits is DROPPED with no error — the service simply
+    // never sees it. services.yaml declares `map_id`; it has to be sent from here too.
+    const payload = {
+      vacuum_entity_id: vacuumEntityId,
+      entity_id: String(entityId ?? ""),
+    };
+    if (mapId) payload.map_id = String(mapId);
     const result = await this.callService(
       DOMAIN,
       SERVICE_SETUP_SET_MAP_CAMERA,
-      { vacuum_entity_id: vacuumEntityId, entity_id: String(entityId ?? "") },
+      payload,
       true,
     );
     return result?.response ?? result ?? null;

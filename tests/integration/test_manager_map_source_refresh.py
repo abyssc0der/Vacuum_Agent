@@ -826,3 +826,94 @@ async def test_render_data_roborock_dispatches(manager, monkeypatch):
     out = await manager.map_source.async_get_map_render_data(vacuum_entity_id=_VAC)
     assert out["present"] is True and out["format"] == "room_pixels_v1"
     assert seen["room_names"] == {"7": "Den"}     # sourced from the manager's rooms
+
+
+# ---------------------------------------------------------------------------
+# [LMI-1] — [LMI-4]  the live-map camera override is PER MAP
+#
+# `_resolve_live_map_image_entity` TAKES a map_id and the override ignored it: one
+# per-vacuum value, checked first and unconditionally, served every map. On a multi-map
+# vacuum that is a wrong backdrop, not a preference — and the user who found it had been
+# re-pointing the override by hand before each import, which is the bug's shape handed
+# back to him as a workaround.
+#
+# The per-vacuum value is KEPT as the fallback for maps with no entry of their own, so
+# this is additive: no existing install changes and nothing migrates.
+# ---------------------------------------------------------------------------
+
+def _vac_record(manager) -> dict:
+    return manager.data.setdefault("vacuums", {}).setdefault(_VAC, {})
+
+
+def _register_pattern() -> None:
+    register_adapter_config(_VAC, {
+        "adapter_id": "eufy", "source": "code", "entities": {},
+        "mapping": {"live_map_image_entity_pattern": "image.{object_id}_{map_slug}"},
+    })
+
+
+def test_lmi_1_a_per_map_override_wins_for_its_own_map(hass, manager):
+    """[LMI-1] THE RED INPUT."""
+    _register_pattern()
+    rec = _vac_record(manager)
+    rec["live_map_image_entity"] = "camera.pinned_everywhere"
+    rec["live_map_image_entity_by_map"] = {"Upstairs": "camera.upstairs"}
+    hass.states.async_set("camera.pinned_everywhere", "idle")
+    hass.states.async_set("camera.upstairs", "idle")
+
+    got = manager._resolve_live_map_image_entity(
+        vacuum_entity_id=_VAC, map_id="Upstairs"
+    )
+    assert got == "camera.upstairs", (
+        "a camera chosen for THIS map must beat the per-vacuum one"
+    )
+
+
+def test_lmi_2_the_per_vacuum_override_still_serves_maps_without_one(hass, manager):
+    """[LMI-2] THE NO-REGRESSION PIN, and the reason this change is additive. Every
+    install that has an override today has only the per-vacuum one; it must keep
+    working exactly as before for any map that has no entry of its own."""
+    _register_pattern()
+    rec = _vac_record(manager)
+    rec["live_map_image_entity"] = "camera.pinned_everywhere"
+    rec["live_map_image_entity_by_map"] = {"Upstairs": "camera.upstairs"}
+    hass.states.async_set("camera.pinned_everywhere", "idle")
+    hass.states.async_set("camera.upstairs", "idle")
+
+    got = manager._resolve_live_map_image_entity(
+        vacuum_entity_id=_VAC, map_id="Downstairs"
+    )
+    assert got == "camera.pinned_everywhere", (
+        "choosing a camera for one floor must not blank another"
+    )
+
+
+def test_lmi_3_with_no_per_map_entries_nothing_changes(hass, manager):
+    """[LMI-3] The pure-legacy install: no per-map dict at all. This is what every
+    existing user has, and it must behave exactly as it did."""
+    _register_pattern()
+    rec = _vac_record(manager)
+    rec["live_map_image_entity"] = "camera.pinned_everywhere"
+    rec.pop("live_map_image_entity_by_map", None)
+    hass.states.async_set("camera.pinned_everywhere", "idle")
+
+    for map_id in ("Upstairs", "Downstairs", "6"):
+        assert manager._resolve_live_map_image_entity(
+            vacuum_entity_id=_VAC, map_id=map_id
+        ) == "camera.pinned_everywhere"
+
+
+def test_lmi_4_a_per_map_entry_pointing_at_nothing_falls_through(hass, manager):
+    """[LMI-4] An entry whose camera has been deleted or renamed must not pin a dead
+    id — it falls through to the per-vacuum value, the same existence bar the override
+    has always been held to."""
+    _register_pattern()
+    rec = _vac_record(manager)
+    rec["live_map_image_entity"] = "camera.pinned_everywhere"
+    rec["live_map_image_entity_by_map"] = {"Upstairs": "camera.deleted_last_week"}
+    hass.states.async_set("camera.pinned_everywhere", "idle")
+
+    got = manager._resolve_live_map_image_entity(
+        vacuum_entity_id=_VAC, map_id="Upstairs"
+    )
+    assert got == "camera.pinned_everywhere", "a dead per-map entry must not win"

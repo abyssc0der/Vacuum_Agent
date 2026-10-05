@@ -10,6 +10,11 @@ only.
 
 ## [Unreleased]
 
+### Fixed
+
+- **On a vacuum with more than one map, choosing a live-map camera pinned every map to it.** The override is stored per vacuum and was consulted for whichever map you were looking at, so a second floor drew the first floor's backdrop. One user worked out the shape of this from the outside and had been re-pointing the setting by hand before each import, which is the bug handed back as a workaround. Picking a camera now applies to the map you are on, and the setting you already have keeps serving any map you have not chosen one for — so nothing you have configured changes, and you only set the floors you need to.
+
+
 ## [2.2.3] - 2026-10-05
 
 Everything here came out of v2.2.2 reaching real multi-map installs within hours — thanks to **@mactron254** and **@150d**, who between them reported [#62](https://github.com/kingchddg901/Vacuum_Agent/issues/62) and [#64](https://github.com/kingchddg901/Vacuum_Agent/issues/64), and helped each other debug in the process.
