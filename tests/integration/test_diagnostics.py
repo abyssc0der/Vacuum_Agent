@@ -1235,3 +1235,146 @@ async def test_missing_job_active_warning_names_both_causes(hass):
     )
     # The actionable part must survive the hedging.
     assert "interrupted" in warning and "completion cannot arm" in warning.lower()
+
+
+# ---------------------------------------------------------------------------
+# issue #61 — the self-check spoke Eufy to a Roborock owner, and was green on a
+# failing install
+# ---------------------------------------------------------------------------
+
+def _issue61_out(**over):
+    """The shape _vacuum_diagnostics assembled for the issue-61 reporter: a Roborock S7
+    that DOES resolve active_map (so the native-brand branch never fires) with battery
+    and charging unresolved because his entity ids are Spanish."""
+    out = {
+        "capabilities": {
+            "detected_model": "roborock.vacuum.a15",
+            "model_family": "generic",
+            "supports_room_clean": True,
+            "supports_rooms": False,
+        },
+        "entity_resolution": {
+            "active_map": {"entity_id": "select.s7_mapa_seleccionado", "exists": True,
+                           "registered": True, "state": "Habitaciones"},
+            "battery": {"entity_id": "sensor.s7_battery", "exists": False,
+                        "registered": False, "state": None},
+            "charging": {"entity_id": "binary_sensor.s7_charging", "exists": False,
+                         "registered": False, "state": None},
+        },
+        "vacuum_state": {"segment_count": None},
+        "adapter": {"brand": "Roborock"},
+        "maps": {"map_count": 2, "maps": [
+            {"map_id": "Comedor", "room_count": 4},
+            {"map_id": "Habitaciones", "room_count": 3},
+        ]},
+        "managed_rooms_by_map": {"Habitaciones": {"room_count": 3}},
+        "roborock_geometry_drift": {"present": True, "aligned": True},
+        "active_map_id": "Habitaciones",
+    }
+    out.update(over)
+    return out
+
+
+def test_diag19_transport_does_not_speak_eufy_to_another_brand():
+    """[DIAG-19] issue #61. `novel` is Eufy's api_type and MQTT is its transport; a
+    Roborock has neither. The branch fires for ANY brand whose active_map resolves, so
+    this reporter was told his vacuum runs on another manufacturer's transport. Same
+    family as the "eufy-clean fork" line issue #60 showed to Dreame owners."""
+    sc = _self_check(_issue61_out())
+
+    assert "novel" not in sc["transport"].lower()
+    assert "mqtt" not in sc["transport"].lower()
+    assert "Roborock" in sc["transport"]
+    # the OBSERVATION is unchanged — only who it is attributed to
+    assert "active-map" in sc["transport"]
+
+
+def test_diag19b_eufy_still_gets_its_own_transport_words():
+    """[DIAG-19b] The fix must not strip Eufy's correct description from Eufy."""
+    sc = _self_check(_issue61_out(adapter={"brand": "Eufy"}))
+    assert "novel / MQTT" in sc["transport"]
+
+
+def test_diag20_a_missing_battery_role_is_a_warning_not_silence():
+    """[DIAG-20] issue #61. The self-check returned `warnings: []` on an install
+    throwing a TypeError every few seconds, with `battery: exists false` sitting in the
+    same payload. Both roles degrade SILENTLY — get_battery_level returns None and
+    is_charging returns a flat False — so if the self-check does not say it, nothing
+    does."""
+    sc = _self_check(_issue61_out())
+    joined = " | ".join(sc["warnings"])
+
+    assert sc["warnings"], "a self-check cannot be green on an install that is throwing"
+    assert "sensor.s7_battery" in joined
+    assert "binary_sensor.s7_charging" in joined
+    # actionable, not just named
+    assert "refused" in joined and "NOT charging" in joined
+
+
+def test_diag20b_resolved_roles_raise_no_warning():
+    """[DIAG-20b] The complement, so the warning cannot be a constant. A declared role
+    that EXISTS must stay silent, or the block becomes noise every reader learns to
+    skip."""
+    out = _issue61_out()
+    out["entity_resolution"]["battery"] = {
+        "entity_id": "sensor.s7_bateria", "exists": True, "registered": True, "state": "87"
+    }
+    out["entity_resolution"]["charging"] = {
+        "entity_id": "binary_sensor.s7_cargando", "exists": True, "registered": True,
+        "state": "off",
+    }
+    sc = _self_check(out)
+    joined = " | ".join(sc["warnings"])
+    assert "bateria" not in joined and "cargando" not in joined
+
+
+def test_diag21_a_blank_active_map_is_not_a_misbound_role():
+    """[DIAG-21] Found on live hardware 2026-10-04, not by the suite.
+
+    Roborock's `select.ivy_selected_map` sits at `unknown` between maps. `unknown` names
+    none of the vacuum's maps because it names NOTHING, so the #60 mismatch predicate
+    classified it as a mis-bound role and told the owner to go re-point a role that was
+    bound perfectly correctly. The warning should still fire -- rooms genuinely cannot be
+    imported -- but with the other message, the one about the integration not providing a
+    map id yet.
+
+    The guard's own comment had always said "a value that is NOT A SENTINEL but names no
+    known map"; only the second half was implemented."""
+    out = _issue61_out(
+        adapter={"brand": "Roborock"},
+        entity_resolution={
+            "active_map": {"entity_id": "select.ivy_selected_map", "exists": True,
+                           "registered": True, "state": "unknown"},
+        },
+        maps={"map_count": 1, "maps": [{"map_id": "Main floor", "room_count": 10}]},
+        managed_rooms_by_map={},
+        active_map_id=None,
+        discoverable_room_count=0,
+    )
+    sc = _self_check(out)
+    joined = " | ".join(sc["warnings"])
+
+    assert joined, "a blank active_map still blocks importing and must warn"
+    assert "bound to the wrong entity" not in joined, (
+        "a sentinel is an absent value, not a wrong one"
+    )
+    assert "not providing a current map id" in joined
+
+
+def test_diag21b_a_real_wrong_value_still_reads_as_misbound():
+    """[DIAG-21b] The complement, so the sentinel check cannot be over-applied: a value
+    that is genuinely present and genuinely names no map IS a mis-bound role, which is
+    the whole finding of #60. A camera's state is a timestamp."""
+    out = _issue61_out(
+        adapter={"brand": "Roborock"},
+        entity_resolution={
+            "active_map": {"entity_id": "camera.ivy_map", "exists": True,
+                           "registered": True, "state": "2026-10-04 19:51:07"},
+        },
+        maps={"map_count": 1, "maps": [{"map_id": "Main floor", "room_count": 10}]},
+        managed_rooms_by_map={},
+        active_map_id=None,
+        discoverable_room_count=0,
+    )
+    joined = " | ".join(_self_check(out)["warnings"])
+    assert "bound to the wrong entity" in joined

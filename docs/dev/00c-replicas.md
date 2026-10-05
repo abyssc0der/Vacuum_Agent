@@ -67,7 +67,20 @@ that decision is what must agree.
 Not unified because each takes its wanted-key from a different place and feeds a different
 consumer. **Declared at** `adapters/entity_resolve.py::rescue_by_translation_key`.
 
-*History: `ef810519` fixed two; `35ce560f` fixed the third, ten hours later.*
+**Rung 4 is in copy 1 only — a decision, not an oversight (issue #61).** The ladder now
+ends with a `device_class` rung, because a provider may set no `translation_key` at all:
+Roborock's `sensor.<vac>_battery` and `binary_sensor.<vac>_charging` carry none (measured),
+so a localized install resolved `active_map` — which *has* a key — and failed `battery` and
+`charging`, leaving `get_battery_level` returning None for the whole session. `battery` and
+`charging` are declared in the `entities` map, which only copy 1 reads; no adapter lists
+either in `entity_candidates`, and no maintenance component has an HA device class at all.
+In copies 2 and 3 the rung would have **no consumer and no input that could make a test for
+it go red**, so it was recorded rather than written. `ROLE_DEVICE_CLASSES` names the roles
+that would care if one ever reaches them. Declared at
+`adapters/entity_resolve.py::rescue_by_device_class`.
+
+*History: `ef810519` fixed two; `35ce560f` fixed the third, ten hours later. Issue #61
+added rung 4 to one copy on purpose and said so in all three.*
 
 ### `RNZM4AYY` — most-specific-declaration ownership test · **3 copies**
 

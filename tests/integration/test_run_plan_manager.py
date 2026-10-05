@@ -21,17 +21,20 @@ Coverage targets
 [RPM-11] _update_room_rule_status_snapshot delegates to the manager.
 [RPM-12] INF-9: the floor_type CODE travels with its English label on the
          estimate's room rows, so a consumer can branch and a locale translate.
+[RPM-13] issue #61: an UNREADABLE battery still yields estimates. float(None) threw,
+         the except swallowed it, and every room estimate came back empty.
 """
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, create_autospec
 
 import pytest
 
 from tests._factories import spec_manager
 
 from custom_components.eufy_vacuum.adapters.registry import register_adapter_config
+from custom_components.eufy_vacuum.learning.manager import LearningManager
 from custom_components.eufy_vacuum.planning.run_plan import RunPlanManager
 
 
@@ -431,3 +434,35 @@ def test_floor_type_code_travels_with_its_label(rpm, hass):
     # A room with no floor type reports null on BOTH — never a stray label with
     # nothing behind it, which is the shape this finding was about.
     assert rooms[2]["floor_type_label"] is None
+
+
+def test_room_estimate_minutes_map_survives_an_unreadable_battery(rpm):
+    """[RPM-13] issue #61.
+
+    `_get_battery_level` returns None when the level cannot be read from either source,
+    and its contract says every caller must decide what that means. This one did not: it
+    called float() on the None, the bare `except Exception` below caught the TypeError,
+    and `{}` came back -- so a user whose battery role failed to resolve silently lost
+    EVERY room time estimate, with only a traceback in the log to show for it.
+
+    The callee declares `current_battery: float | None = None` and documents it as
+    informational, so the right answer here is to pass the None through and keep the
+    estimates, not to refuse them.
+    """
+    rm, mgr = rpm
+    # autospec, not a bare MagicMock: the whole point of this test is the SHAPE of the
+    # call into learning, and a bare mock would accept `current_battery` even if the
+    # real signature had never had it -- which is the parameter under test.
+    learning = create_autospec(LearningManager, instance=True)
+    learning.get_room_learning_estimates.return_value = {
+        "rooms": [{"room_id": 1, "minutes": 12.5}]
+    }
+    mgr._get_learning_manager.return_value = learning
+    mgr._get_battery_level.return_value = None          # the issue-61 install
+
+    out = rm._room_estimate_minutes_map(vacuum_entity_id=_VAC, map_id="6")
+
+    assert out == {1: 12.5}, "an unreadable battery must not void the estimates"
+    assert (
+        learning.get_room_learning_estimates.call_args.kwargs["current_battery"] is None
+    ), "None must reach the callee as None, not as a fabricated 0"

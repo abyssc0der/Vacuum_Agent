@@ -143,7 +143,7 @@ export function applyMobileShellRenderer(proto) {
       ? this.tVocabRaw("device_status", dockStatus, dockStatusLabel ?? _fallbackTitleCase(dockStatus))
       : "";
     // Map switcher lives in the panel header (desktop + mobile), not the map toolbar; empty
-    // string when there's no fork map-switcher so nothing renders.
+    // string when this vacuum has no map-switching select so nothing renders.
     const mapSwitchHtml = this._renderMapSwitch?.(ctx.state) ?? "";
 
     // The Theme view is a long scrolling token list, and the status block

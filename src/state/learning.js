@@ -177,8 +177,11 @@ export function applyLearningState(proto) {
     return this.dashboardSnapshot()?.learning_processing ?? null;
   };
 
-  // Map switcher: the fork's per-vacuum "Switch Map" select, backend-resolved as the
-  // live-map camera's device-sibling. null (control hidden) when the fork build lacks it.
+  // Map switcher: the per-vacuum map-switching select, backend-resolved — from the
+  // declared `active_map` role when that is a select (Roborock, Dreame), else from the
+  // eufy-clean fork's `_map_select` sibling of the live-map camera (Eufy, whose
+  // active_map is a read-only sensor). null = control hidden. Before issue #61 only the
+  // fork rung existed, so a correctly-configured Roborock got no switcher at all.
   proto.mapSwitcher = function () {
     return this.dashboardSnapshot()?.map_switcher ?? null;
   };

@@ -10,6 +10,27 @@ only.
 
 ## [Unreleased]
 
+Four of these came out of [#61](https://github.com/kingchddg901/Vacuum_Agent/issues/61) — thanks to **@mactron254** for the report, the entity list and the diagnostics, which is what made the second and third findable at all. The fifth surfaced on a live box while verifying the others.
+
+> **These are backend changes, so they need a full Home Assistant restart**, not just a browser refresh. The card is unchanged.
+
+### Fixed
+
+- **No floor/map switcher in the header on Roborock and Dreame.** If you had more than one map, Vacuum Agent would notice when you changed floors and warn you that your selection no longer matched the vacuum's active map — and then give you no control to do anything about it. You stayed stuck on the first map you imported.
+
+  The switcher was looked up by a naming convention that belongs to the eufy-clean fork, so only Eufy ever had one. It now uses the Active Map role you already configured, which means it works on any brand that has one. Nothing changes for Eufy, whose own active-map entity is read-only and still resolves the old way.
+
+- **Battery and charging did not resolve if your entities are not in English.** Home Assistant builds an entity's id from its *translated* name when it is first created, so on a Spanish, German or French install the ids share nothing with the English ones we look for. We already recovered from that by matching the integration's own internal key — but Roborock sets no key on battery or charging, so those two kept failing.
+
+  They are now also matched on the device class the integration declares, which is neither translated nor brand-specific. One consequence of them failing was invisible: charging state has no fallback by design, so a charging robot simply read as "not charging" forever, with nothing in the log.
+
+- **Room time estimates silently disappeared when the battery could not be read.** The estimate code treated an unreadable battery as a number, threw, and caught its own error — so every room came back with no estimate and the only sign was a repeating traceback in the log. The battery is informational there, so the estimates now come through without it.
+
+- **Diagnostics accused a correctly-configured Active Map role of being bound to the wrong entity.** If that role's entity had no value yet — Roborock's map selector sits at `unknown` between maps — the self-check reported it as pointing at the wrong entity and told you to go re-point it. A value that names no map because it names *nothing* is an absent reading, not a wrong one. The warning still appears, since rooms genuinely cannot be imported in that state, but it now says the integration has not provided a map id rather than blaming your configuration.
+
+- **Diagnostics described a Roborock as running on Eufy's transport, and reported no warnings on an install that was failing.** The transport line said "novel / MQTT" — Eufy's words — for any brand, and the self-check returned an empty warning list while two unresolved entities sat in the same file causing an error every few seconds. It now names your actual brand, and says plainly when battery or charging has not resolved and what that breaks.
+
+
 ## [2.2.1] - 2026-10-02
 
 A bugfix release. Four of these came out of [#60](https://github.com/kingchddg901/Vacuum_Agent/issues/60) — thanks to **@Lucius-Waverly** for the report and the diagnostics, which is what made them findable.

@@ -30,8 +30,13 @@ class _FakeRegistry:
         return self._vacuum_entry if entity_id == "vacuum.alfred" else None
 
 
-def _install(monkeypatch, *, present, registry_ids, config_entry_id="CE1", keys=None):
-    """Wire a fake state machine + entity registry into the module under test."""
+def _install(monkeypatch, *, present, registry_ids, config_entry_id="CE1", keys=None,
+             classes=None):
+    """Wire a fake state machine + entity registry into the module under test.
+
+    ``classes`` maps entity_id -> device class, for the rung-4 (device_class) tests.
+    Entries built without it carry ``device_class=None``, which is what a provider that
+    declares none looks like — so the rung stays inert for every pre-existing test."""
     hass = SimpleNamespace(
         states=SimpleNamespace(get=lambda eid: object() if eid in present else None)
     )
@@ -40,7 +45,12 @@ def _install(monkeypatch, *, present, registry_ids, config_entry_id="CE1", keys=
     monkeypatch.setattr(entity_resolve, "er", SimpleNamespace(
         async_get=lambda _h: reg,
         async_entries_for_config_entry=lambda _r, _ce: [
-            SimpleNamespace(entity_id=e, translation_key=(keys or {}).get(e))
+            SimpleNamespace(
+                entity_id=e,
+                translation_key=(keys or {}).get(e),
+                device_class=None,
+                original_device_class=(classes or {}).get(e),
+            )
             for e in registry_ids
         ],
     ))
@@ -510,4 +520,157 @@ def test_tk6_an_empty_key_never_matches():
     """[TK-6] A role with no key must not bind every keyless sibling."""
     assert entity_resolve.rescue_by_translation_key(
         ["sensor.x"], translation_keys={"sensor.x": ""}, wanted_key="", domain="sensor"
+    ) is None
+
+
+# ---------------------------------------------------------------------------
+# RUNG 4 — the DEVICE CLASS (issue #61)
+#
+# Rung 3 matches the provider's `translation_key`. Roborock sets NONE on battery or
+# charging -- measured on the maintainer's box, not assumed:
+#   sensor.ivy_battery          translation_key=None  original_device_class='battery'
+#   binary_sensor.ivy_charging  translation_key=None  original_device_class='battery_charging'
+# So a localized install resolves `active_map` (which HAS a key) and fails `battery`,
+# and `get_battery_level` returns None for the whole session.
+# ---------------------------------------------------------------------------
+
+#: Issue #61's install, Spanish ids. Nothing here shares a suffix with our declarations
+#: and nothing carries a translation_key -- rungs 1, 2 and 3 are all blind by construction.
+_ES = {
+    "sensor.alfred_bateria": "battery",
+    "binary_sensor.alfred_cargando": "battery_charging",
+}
+
+
+def test_dc1_battery_is_rescued_by_its_device_class(monkeypatch):
+    """[DC-1] issue #61. Localized id, no translation_key -- only the class is left."""
+    hass = _install(
+        monkeypatch,
+        present={"sensor.alfred_bateria"},
+        registry_ids=list(_ES),
+        classes=_ES,
+    )
+    out, report = resolve_declared_entities(
+        hass, "vacuum.alfred", {"battery": "sensor.alfred_battery"}
+    )
+    assert out["battery"] == "sensor.alfred_bateria"
+    assert report["battery"]["via"] == "device_class"
+
+
+def test_dc2_charging_proves_the_table_is_not_derivable_from_the_suffix(monkeypatch):
+    """[DC-2] `charging` is declared `_charging` but its device class is
+    `battery_charging`. Deriving the wanted class from the suffix -- the way rung 3
+    derives its wanted key -- would miss this role entirely, which is why
+    ROLE_DEVICE_CLASSES is a table."""
+    hass = _install(
+        monkeypatch,
+        present={"binary_sensor.alfred_cargando"},
+        registry_ids=list(_ES),
+        classes=_ES,
+    )
+    out, report = resolve_declared_entities(
+        hass, "vacuum.alfred", {"charging": "binary_sensor.alfred_charging"}
+    )
+    assert out["charging"] == "binary_sensor.alfred_cargando"
+    assert report["charging"]["via"] == "device_class"
+
+
+def test_dc3_two_battery_sensors_rescue_nothing(monkeypatch):
+    """[DC-3] THE safety property for this rung, and why it is last.
+
+    Device classes are deliberately non-unique: a dock with its own pack publishes a
+    second `battery` sensor on the same device. Reporting the dock's charge as the
+    robot's is WRONG data, not missing data -- every consumer would believe it."""
+    two = {
+        "sensor.alfred_bateria": "battery",
+        "sensor.base_alfred_bateria": "battery",
+    }
+    hass = _install(
+        monkeypatch,
+        present=set(two),
+        registry_ids=list(two),
+        classes=two,
+    )
+    out, report = resolve_declared_entities(
+        hass, "vacuum.alfred", {"battery": "sensor.alfred_battery"}
+    )
+    assert out["battery"] == "sensor.alfred_battery", "must not guess between two packs"
+    assert "battery" not in report
+
+
+def test_dc4_translation_key_outranks_device_class(monkeypatch):
+    """[DC-4] Rung order. The provider's own word for the concept is specific; a device
+    class is coarse. When both could answer, rung 3 must win."""
+    ids = ["sensor.alfred_bateria_dock", "sensor.alfred_nivel"]
+    hass = _install(
+        monkeypatch,
+        present=set(ids),
+        registry_ids=ids,
+        keys={"sensor.alfred_nivel": "battery"},
+        classes={"sensor.alfred_bateria_dock": "battery"},
+    )
+    out, report = resolve_declared_entities(
+        hass, "vacuum.alfred", {"battery": "sensor.alfred_battery"}
+    )
+    assert out["battery"] == "sensor.alfred_nivel"
+    assert report["battery"]["via"] == "translation_key"
+
+
+def test_dc5_a_working_battery_is_never_re_pointed(monkeypatch):
+    """[DC-5] Rung 4 is live on EVERY brand (unlike rung 3, which is inert without
+    keys), so the never-touch-a-working-id property has to hold against it explicitly."""
+    hass = _install(
+        monkeypatch,
+        present={"sensor.alfred_battery", "sensor.alfred_bateria"},
+        registry_ids=["sensor.alfred_battery", "sensor.alfred_bateria"],
+        classes={"sensor.alfred_battery": "battery", "sensor.alfred_bateria": "battery"},
+    )
+    out, report = resolve_declared_entities(
+        hass, "vacuum.alfred", {"battery": "sensor.alfred_battery"}
+    )
+    assert out["battery"] == "sensor.alfred_battery"
+    assert report == {}
+
+
+def test_dc6_an_adapter_may_declare_its_own_class(monkeypatch):
+    """[DC-6] The seam is the argument, not the table -- same shape as translation_keys."""
+    hass = _install(
+        monkeypatch,
+        present={"sensor.alfred_deposito"},
+        registry_ids=["sensor.alfred_deposito"],
+        classes={"sensor.alfred_deposito": "moisture"},
+    )
+    out, report = resolve_declared_entities(
+        hass, "vacuum.alfred", {"water_tank": "sensor.alfred_water_tank"},
+        device_classes={"water_tank": "moisture"},
+    )
+    assert out["water_tank"] == "sensor.alfred_deposito"
+    assert report["water_tank"]["via"] == "device_class"
+
+
+def test_dc7_domain_is_part_of_the_match():
+    """[DC-7] Primitive-level, mirroring [TK-5]. `charging` is a binary_sensor; a
+    `sensor` carrying device_class `battery_charging` is a different entity and must not
+    satisfy it. Tested on the primitive because the resolver derives the domain from the
+    declared id, so a domain bug there is invisible from the outside."""
+    sibs = ["sensor.alfred_carga"]
+    classes = {"sensor.alfred_carga": "battery_charging"}
+    assert entity_resolve.rescue_by_device_class(
+        sibs, device_classes=classes, wanted_class="battery_charging",
+        domain="binary_sensor",
+    ) is None
+    assert entity_resolve.rescue_by_device_class(
+        sibs, device_classes=classes, wanted_class="battery_charging", domain="sensor",
+    ) == "sensor.alfred_carga"
+
+
+def test_dc8_an_unknown_role_asks_for_nothing():
+    """[DC-8] A role with no entry in ROLE_DEVICE_CLASSES derives an empty wanted class,
+    and an empty wanted class must match NOTHING rather than the first sibling that
+    happens to declare one. This is what keeps rung 4 inert for the ~40 roles it has no
+    opinion about."""
+    sibs = ["sensor.alfred_bateria"]
+    classes = {"sensor.alfred_bateria": "battery"}
+    assert entity_resolve.rescue_by_device_class(
+        sibs, device_classes=classes, wanted_class="", domain="sensor",
     ) is None

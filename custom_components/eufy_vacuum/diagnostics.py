@@ -102,6 +102,30 @@ def _entity_snapshot(hass: HomeAssistant, entity_id: Any) -> dict[str, Any]:
     }
 
 
+#: Roles whose ABSENCE core can name a consequence for — the only ones the self-check
+#: warns about. A declared role that does not exist is normal and usually harmless: the
+#: adapter declares `entities` from a NAMING PATTERN for every device, so "declared" has
+#: never meant "exists". Warning on all of them would bury the two that bite.
+#:
+#: Both are read by `core/charging.py`, and both degrade SILENTLY rather than failing
+#: loudly, which is exactly why they need saying out loud here:
+#:   battery  -> get_battery_level returns None from both sources (RP-042/RF-36), and
+#:               every consumer honouring that contract refuses its estimate.
+#:   charging -> is_charging returns a flat False with no fallback, deliberately (a
+#:               substring fallback has known false negatives) — so a charging robot
+#:               reads as not charging, forever, with nothing in the log.
+_ROLE_ABSENCE_CONSEQUENCES: dict[str, str] = {
+    "battery": (
+        "the battery level reads as unavailable from every source and run estimates "
+        "that need it are refused"
+    ),
+    "charging": (
+        "charge state always reads as NOT charging — there is deliberately no fallback, "
+        "so nothing in the log will say this is happening"
+    ),
+}
+
+
 def resolve_active_map_id(entity_resolution: dict[str, Any]) -> str | None:
     """Derive the active map id from the resolved active_map entity's state."""
     state = (entity_resolution.get("active_map") or {}).get("state")
@@ -258,7 +282,21 @@ def _self_check(out: dict[str, Any]) -> dict[str, Any]:
     supports_room_clean = bool(caps.get("supports_room_clean") or caps.get("supports_rooms"))
 
     if has_active_map_entity:
-        transport = "full (novel / MQTT) — active_map sensor present"
+        # BRAND LEAK (issue #61). "novel / MQTT" are EUFY's api_type and transport; a
+        # Roborock has neither, and this branch fires for any brand whose active_map
+        # role resolves — so a Roborock owner reading his own diagnostics was told his
+        # vacuum runs on a transport that belongs to a different manufacturer. Same
+        # family as the "the eufy-clean fork" line issue #60 showed to Dreame owners:
+        # core may describe what it OBSERVES, never in another brand's words
+        # [[feedback_eufy_ism_leak_layers]].
+        #
+        # The observation is the same either way — an active-map entity resolved — so
+        # only the attribution changes.
+        transport = (
+            f"full ({brand} integration) — active-map entity present"
+            if brand and str(brand).strip().lower() != "eufy"
+            else "full (novel / MQTT) — active_map sensor present"
+        )
     elif native_rooms:
         transport = (
             f"native integration ({brand}) — rooms and map come from the {brand} "
@@ -453,7 +491,24 @@ def _self_check(out: dict[str, Any]) -> dict[str, Any]:
         # the wrong entity — telling that user "the integration is not providing a map
         # id" sends them to debug an integration that is working fine.
         _ids = ", ".join(sorted(_enumerated_map_ids))
-        _mismatch = bool(_enumerated_map_ids) and not active_map_names_a_real_map
+        # ⚠ `is_blank_state` IS LOAD-BEARING, and it was missing until 2026-10-04.
+        # The comment above has always said "a value that is NOT A SENTINEL but names no
+        # known map", and the predicate only implemented the second half — so `unknown`,
+        # which names no map because it names NOTHING, took the mismatch branch and told
+        # the user their correctly-bound role was "bound to the wrong entity" and to go
+        # re-point it. Found by deploying to a live box: Roborock's
+        # `select.ivy_selected_map` sits at `unknown` between maps, and 4946 tests had
+        # nothing to say about it [[feedback_live_differential_proof]]. The guard's own
+        # comment named the condition its code omitted [[feedback_partial_guard_blind_spot]].
+        #
+        # Routed through `is_blank_state` rather than re-listing the sentinels, which is
+        # the sharing that `room_discovery._ACTIVE_MAP_SENTINELS` asks for in as many words:
+        # "Sharing the constant is not sharing the question."
+        _mismatch = (
+            bool(_enumerated_map_ids)
+            and not is_blank_state(active_map_state)
+            and not active_map_names_a_real_map
+        )
         warnings.append(
             f"active_map entity "
             f"{active_map_role.get('entity_id') or '(unknown entity)'} reports "
@@ -483,6 +538,25 @@ def _self_check(out: dict[str, Any]) -> dict[str, Any]:
     for _map_id, _room_block in (out.get("managed_rooms_by_map") or {}).items():
         if isinstance(_room_block, dict) and _room_block.get("error"):
             warnings.append(f"managed_rooms_by_map[{_map_id}]: {_room_block['error']}")
+
+    # ISSUE #61 — a self-check that reported `warnings: []` on an install that was
+    # throwing a TypeError every few seconds. `entity_resolution` sat right there in the
+    # same payload with `battery: exists false`, and nothing read it.
+    #
+    # NOT every unresolved role: a declaration is a NAMING PATTERN, not a claim the
+    # entity exists, so most roles are absent on most installs by design and warning on
+    # all of them would bury the ones that matter. Only roles whose absence core can NAME
+    # A CONSEQUENCE for appear here — the same principle as completion_health, which
+    # already warns about `job_active` specifically rather than about roles in general.
+    for _role, _why in _ROLE_ABSENCE_CONSEQUENCES.items():
+        _r = entity_res.get(_role) or {}
+        if _role in entity_res and not _r.get("exists"):
+            warnings.append(
+                f"{_role} entity {_r.get('entity_id') or '(unknown entity)'} does not "
+                f"exist, so {_why}. On a localized install the id is in the user's own "
+                "language and cannot be matched by name; VA now also matches on the "
+                "upstream device class, so this usually means no sibling carries one."
+            )
 
     return {
         "transport": transport,

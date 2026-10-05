@@ -633,11 +633,26 @@ class RunPlanManager:
         if learning is None:
             return {}
         try:
+            # RP-042/RF-36. `_get_battery_level` returns None when the level cannot be
+            # read from EITHER source, and its contract is explicit that "every caller
+            # must decide explicitly what an unreadable battery means for it rather than
+            # receiving a fabricated 0". This caller did not decide -- it called float()
+            # on the None and threw, the `except` below swallowed the TypeError, and
+            # EVERY room estimate came back empty (issue #61: a localized Roborock whose
+            # battery role never resolved, 10 throws in 3 seconds).
+            #
+            # The decision here is to PASS IT THROUGH, not to refuse: this callee
+            # declares `current_battery: float | None = None` and documents it as
+            # "informational only, no blocking", so the estimates are still correct
+            # without it. The sibling at `core/manager.py` refuses instead -- correctly,
+            # because ITS callee takes the battery positionally and estimates runway
+            # from it. Same contract, two callees, two right answers.
+            _battery = self._manager._get_battery_level(vacuum_entity_id)
             estimate = learning.get_room_learning_estimates(
                 self._manager,
                 vacuum_entity_id,
                 str(map_id),
-                current_battery=float(self._manager._get_battery_level(vacuum_entity_id)),
+                current_battery=float(_battery) if _battery is not None else None,
             )
         except Exception:
             _LOGGER.exception("Failed to get learning estimates for %s map %s", vacuum_entity_id, map_id)

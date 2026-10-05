@@ -125,6 +125,15 @@ push named an entity that had never existed — silently, for the whole life of 
 > written three times for three read consumers. `resolve_action_entity` is a CALLER of
 > that decision, not a fourth copy — which is the whole point of keeping the set at three.
 
+> **The READ ladder is four rungs now; this one is still three, deliberately (issue #61).**
+> `resolve_declared_entities` ends with a `device_class` rung, because a provider may set
+> no `translation_key` at all — Roborock sets none on battery or charging. Nothing on the
+> ACT path carries a device class: we press buttons and set selects, and HA declares no
+> device class for either. So the fourth rung would be inert here and no input could make
+> a test for it go red. If an act-path role ever maps to a device class, add it — do not
+> read the asymmetry as the shorter copy being the stale one, which is normally exactly
+> what it means.
+
 ### `INKR1TW7` — an operation that reads another integration's entities must not assume they exist during setup
 
 Defer it to `async_at_started`, or tolerate late availability. Otherwise it reads an empty

@@ -6154,10 +6154,11 @@ class EufyVacuumManager:
             "cv_available": cv_available,
             "cv_missing": cv_missing,
             "live_map_image_entity": live_map_image_entity,
-            # The fork's per-vacuum "Switch Map" select, resolved as a device-sibling of
-            # the live-map camera (None → the card hides the switcher). Backend-fed so the
-            # entity-registry lookup stays server-side; gated on the entity existing, since
-            # it ships with the eufy-clean map_load feature and older builds won't have it.
+            # The per-vacuum map-switching select (None → the card hides the switcher).
+            # Backend-fed so the entity-registry lookup stays server-side. Resolved from
+            # the declared `active_map` role when that is a select (Roborock, Dreame),
+            # else from the eufy-clean fork's `_map_select` sibling of the live-map camera
+            # (Eufy, whose active_map is a read-only sensor). See _resolve_map_switcher.
             "map_switcher": self._resolve_map_switcher(
                 vacuum_entity_id=vacuum_entity_id,
                 live_map_image_entity=live_map_image_entity,
@@ -6211,31 +6212,70 @@ class EufyVacuumManager:
     def _resolve_map_switcher(
         self, *, vacuum_entity_id: str, live_map_image_entity: str | None
     ) -> dict[str, Any] | None:
-        """Resolve the fork's per-vacuum "Switch Map" ``select`` as a device-sibling of the
-        configured live-map camera, for the card's map switcher.
+        """Resolve the per-vacuum map-switching ``select`` for the card's map switcher.
 
         Returns ``{entity_id, current, options, available, frame_ungrounded,
-        frame_ungrounded_reason}`` or ``None`` (control hidden). The select ships with the
-        eufy-clean fork's map_load feature; a user on an older fork build simply won't have
-        the entity, so we gate on its existence and degrade to no switcher. Wrapped
-        defensively — any registry/state hiccup → ``None``, never a broken snapshot.
+        frame_ungrounded_reason}`` or ``None`` (control hidden). Wrapped defensively —
+        any registry/state hiccup → ``None``, never a broken snapshot.
+
+        TWO RUNGS, and the first one is the fix for issue #61:
+
+        1. the DECLARED ``entities.active_map`` role, when it is a ``select``. Roborock
+           and Dreame both declare one (``select.{id}_selected_map`` / ``_active_map``),
+           and it has already been resolved — including through the localized-id rescue
+           ladder, which is how a Spanish install's ``select.s7_mapa_seleccionado`` binds.
+        2. the eufy-clean fork's ``_map_select`` unique_id, as a device-sibling of the
+           live-map camera. Eufy's ``active_map`` is a read-only SENSOR, so rung 1 cannot
+           answer there and this is the only path — it is not legacy, it is Eufy's.
+
+        ⚠ RUNG 1 DID NOT EXIST UNTIL ISSUE #61, and rung 2 was the whole function. That
+        made a FORK NAMING CONVENTION the sole definition of "can this vacuum switch
+        maps", so a Roborock user who had configured ``active_map`` correctly — VA read
+        it, compared it, and warned him his selection did not match it — was shown no
+        control to do anything about it, permanently stuck on his first imported map.
+        Core must own the KEY and never a brand's WORD
+        [[feedback_eufy_is_not_the_default]]; the question "which entity switches the
+        map" already had an answer and this re-derived it with a brand-locked filter
+        instead of reading it [[feedback_centralize_question_not_vocabulary]].
+
+        Rung 1 needs no camera — switching the VA view does not depend on a backdrop — so
+        the ``live_map_image_entity`` gate now sits on rung 2, which genuinely needs the
+        camera's device to sweep siblings from. The change is additive: everything that
+        resolved before still resolves the same way.
 
         ``frame_ungrounded`` tells the card to pause zone drawing + map-tap room select
         after a switch until the robot re-localizes (see _compute_map_frame_gate)."""
-        if not live_map_image_entity:
-            return None
         try:
             from homeassistant.helpers import entity_registry as er
 
-            registry = er.async_get(self.hass)
-            cam_entry = registry.async_get(live_map_image_entity)
-            if cam_entry is None or cam_entry.device_id is None:
-                return None
             select_entity_id: str | None = None
-            for entry in er.async_entries_for_device(registry, cam_entry.device_id):
-                if entry.domain == "select" and str(entry.unique_id or "").endswith("_map_select"):
-                    select_entity_id = entry.entity_id
-                    break
+
+            # RUNG 1 — the declared role. `select.` is load-bearing, not a tidy-up: the
+            # card fires `select.select_option` on whatever comes back, and Eufy's
+            # active_map is a sensor, so binding it here would render a control that
+            # throws on every pick.
+            _declared_active_map = (
+                (_get_adapter_config(vacuum_entity_id) or {}).get("entities", {}) or {}
+            ).get("active_map")
+            if (
+                isinstance(_declared_active_map, str)
+                and _declared_active_map.startswith("select.")
+                and self.hass.states.get(_declared_active_map) is not None
+            ):
+                select_entity_id = _declared_active_map
+
+            # RUNG 2 — the fork's convention, for the brand whose role is a sensor.
+            if select_entity_id is None:
+                if not live_map_image_entity:
+                    return None
+                registry = er.async_get(self.hass)
+                cam_entry = registry.async_get(live_map_image_entity)
+                if cam_entry is None or cam_entry.device_id is None:
+                    return None
+                for entry in er.async_entries_for_device(registry, cam_entry.device_id):
+                    if entry.domain == "select" and str(entry.unique_id or "").endswith("_map_select"):
+                        select_entity_id = entry.entity_id
+                        break
             if not select_entity_id:
                 return None
             state = self.hass.states.get(select_entity_id)

@@ -319,12 +319,13 @@ export function applyMapRenderers(proto) {
   };
 
   /**
-   * Map switcher — the fork's per-vacuum "Switch Map" select, backend-fed via
-   * snapshot.map_switcher. A native <select> rendered in the PANEL HEADER (render-cycle
+   * Map switcher — the per-vacuum map-switching select, backend-fed via
+   * snapshot.map_switcher (the declared `active_map` role on Roborock/Dreame, the
+   * eufy-clean fork's `_map_select` on Eufy — see manager._resolve_map_switcher). A native <select> rendered in the PANEL HEADER (render-cycle
    * renderHeader + the mobile header); embedded dashboard/room cards keep it in the map
    * toolbar (this method is shared, the toolbar call is gated on embeddedInCard). Shown
-   * ONLY when the select entity exists, is available, and offers >1 map (older eufy-clean
-   * builds omit it → nothing renders). Picking fires select.select_option (see
+   * ONLY when the select entity exists, is available, and offers >1 map (a single-map
+   * vacuum, or an older eufy-clean build that omits the select → nothing renders). Picking fires select.select_option (see
    * bindings/map.js _bindMapSwitch); debounced via state.mapSwitchPending.
    */
   proto._renderMapSwitch = function (state) {

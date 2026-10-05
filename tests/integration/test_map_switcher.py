@@ -1,10 +1,12 @@
 """Backend map_switcher resolution + post-switch frame gate for the dashboard snapshot.
 
-The fork's per-vacuum "Switch Map" select (`select.<device>_switch_map`, unique_id
-`<device>_map_select`, novel-only) is resolved as a device-sibling of the configured
-live-map camera. The control is GATED on that entity existing — the select ships with
-the eufy-clean map_load feature, so an older fork build won't have it and the snapshot
-must degrade to no switcher.
+Resolution has TWO rungs. The DECLARED `entities.active_map` role wins when it is a
+`select` (Roborock, Dreame) — it needs no camera, and it is already resolved, including
+through the localized-id rescue. Otherwise the eufy-clean fork's "Switch Map" select
+(`select.<device>_switch_map`, unique_id `<device>_map_select`, novel-only) is resolved
+as a device-sibling of the configured live-map camera; Eufy's own active_map is a
+read-only SENSOR, so that rung is Eufy's, not a legacy path. Either way the control is
+GATED on an entity existing and degrades to no switcher.
 
 The block also carries ``frame_ungrounded`` — after a map switch the robot's coordinate
 frame stays on the old map until it MOVES and re-localizes, so the card pauses zone
@@ -22,11 +24,17 @@ Coverage
 [MSW-8] a cleaning/returning vacuum state clears the gate.
 [MSW-9] no usable active-map signal -> never gated.
 [MSW-10] the resolved block carries frame_ungrounded/reason after a switch.
+[MSW-11] issue #61: a DECLARED active_map select resolves the switcher with no fork
+         sibling and no camera at all (Roborock/Dreame).
+[MSW-12] a declared active_map SENSOR (Eufy) is never bound as the switcher.
+[MSW-13] the declared select loses to nothing: when it has no state, rung 2 still runs.
 """
 
 from __future__ import annotations
 
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+
+from custom_components.eufy_vacuum.adapters.registry import register_adapter_config
 
 
 def _wire_fork_entities(
@@ -187,3 +195,82 @@ async def test_map_switcher_block_reports_frame_ungrounded(hass, manager, mock_c
     out = manager._resolve_map_switcher(vacuum_entity_id=vac, live_map_image_entity=cam_id)
     assert out["frame_ungrounded"] is True
     assert out["frame_ungrounded_reason"] == "map_switched"
+
+
+# ---------------------------------------------------------------------------
+# issue #61 — the declared role (rung 1)
+# ---------------------------------------------------------------------------
+
+_ROBOROCK_CFG = {
+    "adapter_id": "roborock",
+    "source": "code",
+    "entities": {"active_map": "select.s7_mapa_seleccionado"},
+}
+
+
+async def test_msw11_declared_active_map_select_resolves_without_a_fork_sibling(hass, manager):
+    """[MSW-11] issue #61.
+
+    A Roborock user configured `active_map` correctly -- VA read it, compared it against
+    the imported map and warned him they did not match -- and was then shown no control
+    to change it, because resolution looked ONLY for a unique_id ending `_map_select`,
+    which is the eufy-clean fork's convention. He had no such entity and never could.
+    He was stuck on his first imported map permanently.
+
+    No camera is wired here on purpose: switching the VA view does not need a backdrop,
+    and requiring one was part of what hid the control.
+    """
+    register_adapter_config("vacuum.s7", dict(_ROBOROCK_CFG))
+    hass.states.async_set(
+        "select.s7_mapa_seleccionado",
+        "Habitaciones",
+        {"options": ["Comedor", "Habitaciones"]},
+    )
+
+    out = manager._resolve_map_switcher(
+        vacuum_entity_id="vacuum.s7", live_map_image_entity=None
+    )
+
+    assert out is not None, "a declared active_map select must resolve the switcher"
+    assert out["entity_id"] == "select.s7_mapa_seleccionado"
+    assert out["current"] == "Habitaciones"
+    assert out["options"] == ["Comedor", "Habitaciones"]
+    assert out["available"] is True
+
+
+async def test_msw12_a_declared_active_map_sensor_is_never_the_switcher(hass, manager):
+    """[MSW-12] Eufy declares active_map as a read-only SENSOR. The card fires
+    `select.select_option` on whatever this returns, so binding a sensor would render a
+    control that throws on every pick. Rung 1 must decline and leave rung 2 to answer."""
+    register_adapter_config(
+        "vacuum.eufysensor",
+        {"adapter_id": "eufy", "source": "code",
+         "entities": {"active_map": "sensor.eufysensor_active_map"}},
+    )
+    hass.states.async_set("sensor.eufysensor_active_map", "6", {"options": ["6", "7"]})
+
+    out = manager._resolve_map_switcher(
+        vacuum_entity_id="vacuum.eufysensor", live_map_image_entity=None
+    )
+
+    assert out is None, "a sensor must not be bound as the map switcher"
+
+
+async def test_msw13_declared_select_without_state_falls_through_to_the_fork(
+    hass, manager, mock_config_entry
+):
+    """[MSW-13] A declared id is a naming claim, not proof the entity exists. When it has
+    no state, rung 2 must still run -- otherwise adding rung 1 would REMOVE the switcher
+    from the fork installs that have one today."""
+    cam_id, sel_id = _wire_fork_entities(hass, mock_config_entry)
+    register_adapter_config(
+        "vacuum.device123",
+        {"adapter_id": "eufy", "source": "code",
+         "entities": {"active_map": "select.device123_never_created"}},
+    )
+
+    out = manager._resolve_map_switcher(
+        vacuum_entity_id="vacuum.device123", live_map_image_entity=cam_id
+    )
+
+    assert out is not None and out["entity_id"] == sel_id

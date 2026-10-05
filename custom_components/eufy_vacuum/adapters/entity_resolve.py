@@ -279,6 +279,15 @@ def sibling_translation_keys(registry: Any, siblings: "Iterable[str]") -> dict[s
 # tests, so a green suite proves only that each copy is self-consistent. The third was
 # caught by renaming a live vacuum's entities to German.
 #
+#
+# RUNG 4 (device_class, issue #61) IS IN COPY 1 ONLY, and that is a decision, not an
+# oversight. `battery` and `charging` are declared in the `entities` map, which only
+# `resolve_declared_entities` reads; no adapter lists either in `entity_candidates`, and
+# no maintenance component has an HA device class at all (there is none for a brush's
+# remaining life). So in copies 2 and 3 the rung would have no consumer and no input
+# could make a test for it go red -- a claim with no failure mode
+# [[feedback_claim_must_be_able_to_bite]]. ADD IT HERE if a device-class-bearing role
+# ever reaches these two; `ROLE_DEVICE_CLASSES` is the list of roles that would care.
 # `python scripts/doc_anchor.py --show RNF2RCXP` lists every site.
 def resolve_action_entity(
     hass: HomeAssistant,
@@ -453,6 +462,80 @@ def rescue_by_translation_key(
     return matches[0] if len(matches) == 1 else None
 
 
+#: Role -> the Home Assistant DEVICE CLASS that identifies it when the entity id is
+#: localized AND the provider sets no ``translation_key``. Measured on the maintainer's
+#: install: Roborock's ``sensor.ivy_battery`` and ``binary_sensor.ivy_charging`` both
+#: carry ``original_device_class`` and ``translation_key = None``; Eufy's are the same
+#: shape. Dreame DOES set keys (``battery_level`` / ``charging_state``), so rung 3
+#: already answers there and this is inert.
+#:
+#: HA vocabulary, not a brand's — these are the standard classes every integration
+#: declares, so one entry fixes every brand at once [[feedback_eufy_is_not_the_default]].
+#: Only roles whose concept HA models with a device class belong here; a consumable's
+#: remaining life has no device class, which is why the maintenance copy of the rescue
+#: takes no rung 4 (see ``capabilities._rescue_maintenance_source``).
+#:
+#: NOT derivable from the declared suffix, which is why it is a table and not a default:
+#: ``battery`` happens to equal its suffix, ``charging`` does NOT (``battery_charging``).
+ROLE_DEVICE_CLASSES: dict[str, str] = {
+    "battery": "battery",
+    "charging": "battery_charging",
+}
+
+
+def rescue_by_device_class(
+    siblings: "Iterable[str]",
+    *,
+    device_classes: dict[str, str],
+    wanted_class: str,
+    domain: str,
+    exclude: "Iterable[str]" = (),
+) -> str | None:
+    """The one sibling whose device class IS this role's, or None.
+
+    RUNG 4, and the rung issue #61 needed. Rungs 1-2 match the entity id, which is
+    LOCALIZED; rung 3 matches ``translation_key``, which a provider may simply not set.
+    Roborock sets none on battery or charging — measured, not assumed — so a Spanish
+    install resolves ``active_map`` (which HAS a key) and fails ``battery`` and
+    ``charging``, leaving ``get_battery_level`` returning None for the whole session.
+
+    A device class is the integration's own declaration of WHAT A THING IS, in HA's
+    vocabulary rather than any brand's or any language's, so it survives both a renamed
+    entity and a translated one.
+
+    EXACTLY ONE OR NOTHING, matching the rungs above — and the exclusivity matters more
+    here than anywhere else in the ladder, because device classes are deliberately
+    NON-unique: a dock with its own battery publishes a second ``battery`` sensor on the
+    same device. Two matches means we cannot tell the robot's pack from the dock's, and
+    silently reporting the dock's charge as the robot's is wrong data, not missing data.
+
+    THE CASE EXCLUSIVITY CANNOT COVER, stated rather than papered over: a device with
+    exactly ONE device-class-``battery`` sibling that is the DOCK's, because the robot's
+    own sensor is absent. That binds the wrong pack and looks right. It needs the robot's
+    battery to be missing while the dock's is present, which is an install where the role
+    was unreadable either way — so this trades a silent None for a plausible wrong number
+    in a case that is already broken, and only there. Narrowing on the vacuum's object_id
+    (the trick the suffix rung uses) does NOT separate them: HA slugs both ids from the
+    same device name, so a dock entity carries the object_id too.
+    """
+    if not wanted_class:
+        return None
+    skip = set(exclude)
+    matches: list[str] = []
+    for sibling in siblings or ():
+        if not isinstance(sibling, str) or "." not in sibling:
+            continue
+        if sibling in skip:
+            continue
+        sib_domain, _, _ = sibling.partition(".")
+        if sib_domain != domain:
+            continue
+        if device_classes.get(sibling) != wanted_class:
+            continue
+        matches.append(sibling)
+    return matches[0] if len(matches) == 1 else None
+
+
 def _suffix_of(declared: str, vacuum_object_id: str) -> str | None:
     """The naming suffix a declared ID was built from, e.g. ``_total_cleaning_area``.
 
@@ -476,12 +559,14 @@ def resolve_declared_entities(
     overrides: dict[str, Any] | None = None,
     reserved_suffixes: Any = None,
     translation_keys: dict[str, str] | None = None,
+    device_classes: dict[str, str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, dict[str, str]]]:
     """Return ``(entities, report)`` with unresolvable IDs repaired where unambiguous.
 
     ``report`` maps role -> ``{"declared": ..., "resolved": ..., "via": ...}`` for each
     remap, and is empty when nothing needed rescuing (the overwhelmingly common case).
-    ``via`` names the rung that won — ``"suffix"`` or ``"translation_key"``.
+    ``via`` names the rung that won — ``"suffix"``, ``"translation_key"`` or
+    ``"device_class"``.
 
     ⚠ This spec said two keys until 2026-08-24. The two-key shape predates the
     translation_key rung; every entry the function has written since carries the third
@@ -647,6 +732,18 @@ def resolve_declared_entities(
         for e in siblings
         if isinstance(getattr(e, "translation_key", None), str) and e.translation_key
     }
+    # Same shape, for rung 4. The USER's `device_class` wins over the provider's
+    # `original_device_class` — HA resolves them in that order, and a user who re-classed
+    # an entity means it. Unlike `_tk_map` this is NON-empty on every brand, so rung 4 is
+    # the only rung that is live everywhere; its exclusivity guard is what keeps that safe.
+    _dc_map = {
+        e.entity_id: dc
+        for e in siblings
+        if isinstance(
+            (dc := getattr(e, "device_class", None) or getattr(e, "original_device_class", None)),
+            str,
+        ) and dc
+    }
     _sibling_ids = [e.entity_id for e in siblings]
 
     for role, declared in list(entities.items()):
@@ -711,6 +808,13 @@ def resolve_declared_entities(
             # ⚠ CHANGING ONE MEANS CHECKING THE OTHER TWO. The first fix (`ef810519`) landed in
             # two of the three and 4381 green tests said nothing — each copy had its own passing
             # tests. The third was caught only by renaming a live vacuum's entities to German.
+            #
+            # RUNG 4 (device_class, issue #61) IS IN `resolve_declared_entities` ONLY, deliberately:
+            # `battery` and `charging` live in the `entities` map, no adapter lists either in
+            # `entity_candidates`, and no maintenance component has an HA device class at all. Here
+            # the rung would have no consumer and no input could make a test for it go red
+            # [[feedback_claim_must_be_able_to_bite]]. ADD IT if a device-class-bearing role ever
+            # reaches this copy; `ROLE_DEVICE_CLASSES` names the roles that would care.
             # `python scripts/doc_anchor.py --show RNF2RCXP` lists every site.
             _wanted_key = str(
                 (translation_keys or {}).get(role) or suffix.lstrip("_")
@@ -723,6 +827,41 @@ def resolve_declared_entities(
                 exclude=(declared,),
             )
             if not by_key:
+                # RUNG 4 — the DEVICE CLASS (issue #61). Rung 3 cannot help when the
+                # provider sets no translation_key at all, which is not hypothetical:
+                # Roborock's battery and charging entities carry none (measured), so a
+                # Spanish install resolved `active_map` (which HAS a key) and failed
+                # `battery` and `charging`. `get_battery_level` then returns None for the
+                # whole session and every consumer that forgot the None contract throws
+                # — see `planning/run_plan.py` and RP-042/RF-36.
+                #
+                # Deliberately LAST: a device class is coarse (every battery sensor on
+                # the device shares one), so it must never outrank a match on the id or
+                # on the provider's own key. It fires only when all three are exhausted.
+                _wanted_class = str(
+                    (device_classes or {}).get(role) or ROLE_DEVICE_CLASSES.get(role) or ""
+                ).strip().lower()
+                by_class = rescue_by_device_class(
+                    _sibling_ids,
+                    device_classes=_dc_map,
+                    wanted_class=_wanted_class,
+                    domain=domain,
+                    exclude=(declared,),
+                )
+                if not by_class:
+                    continue
+                entities[role] = by_class
+                report[role] = {
+                    "declared": declared,
+                    "resolved": by_class,
+                    "via": "device_class",
+                }
+                _LOGGER.info(
+                    "%s: entity role %r did not resolve as %s, no sibling suffix matched "
+                    "and the provider sets no translation_key; using %s, whose device "
+                    "class is %r",
+                    vacuum_entity_id, role, declared, by_class, _wanted_class,
+                )
                 continue
             entities[role] = by_key
             report[role] = {

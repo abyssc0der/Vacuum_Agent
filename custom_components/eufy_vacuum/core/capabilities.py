@@ -277,6 +277,15 @@ def _rescue_maintenance_source(
     # ⚠ CHANGING ONE MEANS CHECKING THE OTHER TWO. The first fix (`ef810519`) landed in
     # two of the three and 4381 green tests said nothing — each copy had its own passing
     # tests. The third was caught only by renaming a live vacuum's entities to German.
+    #
+    # RUNG 4 (device_class, issue #61) IS IN COPY 1 ONLY, and that is a decision, not an
+    # oversight. `battery` and `charging` are declared in the `entities` map, which only
+    # `resolve_declared_entities` reads; no adapter lists either in `entity_candidates`, and
+    # no maintenance component has an HA device class at all (there is none for a brush's
+    # remaining life). So in copies 2 and 3 the rung would have no consumer and no input
+    # could make a test for it go red -- a claim with no failure mode
+    # [[feedback_claim_must_be_able_to_bite]]. ADD IT HERE if a device-class-bearing role
+    # ever reaches these two; `ROLE_DEVICE_CLASSES` is the list of roles that would care.
     # `python scripts/doc_anchor.py --show RNF2RCXP` lists every site.
     return rescue_by_translation_key(
         siblings,
@@ -819,6 +828,13 @@ def augment_candidates_from_device(
                 # ⚠ CHANGING ONE MEANS CHECKING THE OTHER TWO. The first fix (`ef810519`) landed in
                 # two of the three and 4381 green tests said nothing — each copy had its own passing
                 # tests. The third was caught only by renaming a live vacuum's entities to German.
+                #
+                # RUNG 4 (device_class, issue #61) IS IN `resolve_declared_entities` ONLY, deliberately:
+                # `battery` and `charging` live in the `entities` map, no adapter lists either in
+                # `entity_candidates`, and no maintenance component has an HA device class at all. Here
+                # the rung would have no consumer and no input could make a test for it go red
+                # [[feedback_claim_must_be_able_to_bite]]. ADD IT if a device-class-bearing role ever
+                # reaches this copy; `ROLE_DEVICE_CLASSES` names the roles that would care.
                 # `python scripts/doc_anchor.py --show RNF2RCXP` lists every site.
                 by_key = rescue_by_translation_key(
                     [s for s in siblings if s not in seen],
