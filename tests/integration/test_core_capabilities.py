@@ -1443,3 +1443,58 @@ async def test_cap_10g_a_declared_role_survives_even_when_unresolved(hass, manag
     assert "dock_status" in roles, (
         "the adapter DECLARES this role — dropping it would hide a real failure"
     )
+
+
+async def test_cap_17e_an_override_on_a_role_with_no_candidates_resolves(hass):
+    """[CAP-17e] THE RED INPUT for the other half of the issue-#63 fix.
+
+    Overrides were prepended only for roles already present in `entity_candidates`, so a
+    pick on any other role never entered the list `_find` reads. `_find` then resolved
+    nothing, saw `entity_id != wanted`, and reported `override_unresolved` — "your chosen
+    entity is missing" — about an entity that existed and was reporting a value, while
+    `_entity_bindings` read the declared map where the same override HAD been applied and
+    labelled the row `chosen_by: override`. One row asserting both.
+
+    Measured on a Roborock Saros 20: `work_mode` is Eufy's vocabulary and appears in no
+    Roborock candidate list, yet the user had been offered a picker for it and used it.
+
+    live:ENT-7 says a user's explicit choice outranks derivation. It cannot do that from
+    outside the list the resolver reads.
+    """
+    hass.states.async_set(_VAC, "docked", {"supported_features": 0})
+    hass.states.async_set("sensor.alfred_status", "charging")
+
+    caps = detect_capabilities(
+        hass,
+        vacuum_entity_id=_VAC,
+        # work_mode is deliberately absent from the candidate map, as on Roborock.
+        entity_candidates={"task_status": ["sensor.alfred_task_status"]},
+        entity_overrides={"work_mode": "sensor.alfred_status"},
+    )
+
+    assert caps["entities"]["work_mode"] == "sensor.alfred_status", (
+        "the user's explicit pick must win for a role the brand does not search for"
+    )
+    assert caps["entity_resolution_reasons"]["work_mode"] != "override_unresolved", (
+        "an override pointing at a LIVE entity was reported as missing — the exact "
+        "contradiction a reporter saw on screen"
+    )
+
+
+async def test_cap_17f_a_dead_override_on_an_uncandidated_role_still_says_so(hass):
+    """[CAP-17f] The complement, so CAP-17e cannot be satisfied by simply trusting any
+    override. A pick at an entity that does NOT exist must still report
+    `override_unresolved`, whether or not the role has candidates — that is the whole
+    point of the reason."""
+    hass.states.async_set(_VAC, "docked", {"supported_features": 0})
+
+    caps = detect_capabilities(
+        hass,
+        vacuum_entity_id=_VAC,
+        entity_candidates={"task_status": ["sensor.alfred_task_status"]},
+        entity_overrides={"work_mode": "sensor.deleted_last_tuesday"},
+    )
+
+    assert caps["entity_resolution_reasons"]["work_mode"] == "override_unresolved", (
+        "a genuinely dead pick must still be reported as such"
+    )
