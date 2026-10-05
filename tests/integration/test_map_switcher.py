@@ -31,6 +31,12 @@ Coverage
 [MSW-14] the post-switch frame gate watches the DECLARED active_map role, so it arms on
          a brand whose role is a select (Roborock/Dreame), not only on Eufy's sensor.
 [MSW-15] Eufy is unaffected: its declared role IS the id the gate used to hardcode.
+[MSW-16] CONTRACT: the snapshot's map_switcher.current_map_id is what the CARD's
+         activeMapId() reads. Renaming it must break a test here, not silently stop the
+         card working.
+[MSW-17] ...and `current` (raw, for the dropdown) and `current_map_id` (canonical, for
+         identity) must diverge on a whitespace-named map, which is the input that
+         exposed them being conflated.
 """
 
 from __future__ import annotations
@@ -82,6 +88,10 @@ async def test_map_switcher_resolves_sibling_select(hass, manager, mock_config_e
     assert out == {
         "entity_id": sel_id,
         "current": "My home (ID: 6)",
+        # Canonical twin of `current`, for consumers using it as a map IDENTITY rather
+        # than as the dropdown's display text. Equal here because this map name carries
+        # no surrounding whitespace; [MSW-17] is the case where they differ.
+        "current_map_id": "My home (ID: 6)",
         "options": ["My home (ID: 6)", "Testing map (ID: 7)"],
         "available": True,
         "frame_ungrounded": False,
@@ -327,3 +337,72 @@ async def test_msw15_eufy_frame_gate_is_unchanged_by_the_role_read(hass, manager
     assert manager._compute_map_frame_gate(vacuum_entity_id=vac) == (False, None)
     _set_active_map(hass, "gate15", "7")
     assert manager._compute_map_frame_gate(vacuum_entity_id=vac) == (True, "map_switched")
+
+
+async def test_msw16_map_switcher_current_is_the_cards_active_map_source(hass, manager):
+    """[MSW-16] A CROSS-LANGUAGE CONTRACT, pinned because breaking it is silent.
+
+    `src/state/rooms.js::activeMapId()` reads `snapshot.map_switcher.current` to decide
+    which map the card is displaying. No JS test can see whether the backend still emits
+    that key -- those tests stub the snapshot, so they prove the card reads the field
+    when present and nothing about whether it is ever present.
+
+    That gap cost a deploy cycle. The first version of the card fix read
+    `snapshot.active_map_id`, which exists on `get_lifecycle_state()` and
+    `get_start_status()` but NOT on this payload: the rung silently did nothing, the card
+    fell through to its old broken ladder, and every JS test still passed.
+
+    So this asserts, from the side that produces it, the exact key the card consumes.
+    """
+    register_adapter_config(
+        "vacuum.msw16",
+        {"adapter_id": "roborock", "source": "code",
+         "entities": {"active_map": "select.msw16_selected_map"}},
+    )
+    hass.states.async_set("select.msw16_selected_map", "Junk map",
+                          {"options": ["Main floor", "Junk map"]})
+
+    block = manager._resolve_map_switcher(
+        vacuum_entity_id="vacuum.msw16", live_map_image_entity=None
+    )
+
+    assert block is not None
+    assert "current_map_id" in block, (
+        "src/state/rooms.js::activeMapId() reads map_switcher.current_map_id -- renaming "
+        "or removing this key stops the card following map switches, silently"
+    )
+    assert block["current"] == "Junk map", "current is the display text for the dropdown"
+    assert block["current_map_id"] == "Junk map", "current_map_id is the map identity"
+
+
+async def test_msw17_the_two_current_fields_diverge_on_whitespace(hass, manager):
+    """[MSW-17] THE RED INPUT for the pair, and the case this suite was missing.
+
+    `current` must stay RAW: the card pairs it with `options` to mark the selected
+    entry, and those option strings go straight back to `select.select_option`, which
+    matches exactly. `current_map_id` must be CANONICAL: the card compares it with ===
+    against stored map keys, and those are whitespace-stripped.
+
+    When the card read `current` as the map identity, the install the whitespace fix
+    exists for got an EMPTY room list and a refusal to start -- the two fixes in this
+    release cancelling each other out. Nothing in either suite passed a value with
+    surrounding whitespace, so both stayed green.
+    """
+    register_adapter_config(
+        "vacuum.msw17",
+        {"adapter_id": "roborock", "source": "code",
+         "entities": {"active_map": "select.msw17_selected_map"}},
+    )
+    hass.states.async_set("select.msw17_selected_map", "Obergeschoss ",
+                          {"options": ["Erdgeschoss", "Obergeschoss "]})
+
+    block = manager._resolve_map_switcher(
+        vacuum_entity_id="vacuum.msw17", live_map_image_entity=None
+    )
+
+    assert block["current"] == "Obergeschoss ", (
+        "the dropdown's selected-option match needs the option string verbatim"
+    )
+    assert block["current_map_id"] == "Obergeschoss", (
+        "the map identity must match the stripped key everything else is stored under"
+    )

@@ -184,9 +184,24 @@ export function applySetupRenderers(proto) {
         return `<div class="evcc-setup-step-body muted">${this.t("setup.complete_add_vacuum_first")}</div>`;
       }
 
+      // ISSUE #62. The prompt -- "Import the vacuum's currently active map" -- used to be
+      // shown ONLY when nothing had been imported yet, so the one state where it matters
+      // was the one state that hid it. A user with one map already in sees a button
+      // reading "Import Another Map", presses it, and gets the map they already have
+      // re-imported, because the action imports whichever map is ACTIVE ON THE ROBOT and
+      // the button does not change that. Two separate reporters hit this; one of them
+      // reverse-engineered the real contract (switch the robot first, then import) and
+      // posted it as a workaround for the other.
+      //
+      // The label stays "Import Another Map" -- that IS the user's intent -- and the
+      // sentence that says how now travels with it in both states. Deliberately no new
+      // i18n key: the existing string already says exactly the missing thing, and a new
+      // one costs 18 hand-translated packs to say it again.
+      const promptHtml =
+        `<div class="evcc-setup-step-body">${this.t("setup.import_active_map_prompt")}</div>`;
       const summaryHtml = mapCount > 0
-        ? `<div class="evcc-setup-step-body muted">${this.t("setup.maps_imported", { count: mapCount })}</div>`
-        : `<div class="evcc-setup-step-body">${this.t("setup.import_active_map_prompt")}</div>`;
+        ? `<div class="evcc-setup-step-body muted">${this.t("setup.maps_imported", { count: mapCount })}</div>${promptHtml}`
+        : promptHtml;
 
       const buttonLabel = mapCount > 0 ? this.t("setup.import_another_map") : this.t("setup.import_active_map");
       const buttonClass = mapCount > 0 ? "secondary" : "";

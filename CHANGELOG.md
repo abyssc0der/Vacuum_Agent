@@ -10,6 +10,27 @@ only.
 
 ## [Unreleased]
 
+## [2.2.3] - 2026-10-05
+
+Everything here came out of v2.2.2 reaching real multi-map installs within hours — thanks to **@mactron254** and **@150d**, who between them reported [#62](https://github.com/kingchddg901/Vacuum_Agent/issues/62) and [#64](https://github.com/kingchddg901/Vacuum_Agent/issues/64), and helped each other debug in the process.
+
+[#63](https://github.com/kingchddg901/Vacuum_Agent/issues/63) — the panel closing when you assign an entity under Setup → System — is **not** fixed here. It was expected to be a consequence of the map problems below, and it is not: it still happens with both maps imported and leaves nothing in the log. It is being worked separately.
+
+> **This release changes both the integration and the card**, so it needs a full Home Assistant restart, followed by a hard refresh of the dashboard (Ctrl+Shift+R) if anything still looks stale.
+
+### Fixed
+
+- **Switching maps did not change the rooms on screen.** The selector changed, the warning about the selection not matching stayed up, and the Rooms section kept showing the previous map's rooms. The card worked out which map it was displaying by looking for an entity named after Eufy's convention, and when that was absent — which it always is on Roborock and Dreame — it fell back to reading the map id off whichever room it happened to encounter first. That is arbitrary, so it answered with whichever map had been enumerated first regardless of which one was active. It now uses the map the integration has already resolved.
+
+  This one only became visible in v2.2.2. Before that there was no way to switch maps on those brands, so the card's confusion had nowhere to show.
+
+- **Switching maps reported the other map's rooms as missing.** Every room of the floor you had just left was listed as gone. They were not gone, they were on the other floor. The room-drift check was given the map you were on and used it to decide which rooms had been dismissed, while reading the list of configured rooms across every map at once. Those counters are remembered between restarts, so the false alarms built up rather than clearing. Any rooms already listed wrongly will clear on the next discovery pass against the map they actually belong to — switching to that floor is enough, and nothing needs resetting by hand.
+
+- **"Import Another Map" could only ever import the map already active on the robot.** Pressing it reported that the map was already imported, because it imports whichever map the robot currently has loaded — and the sentence saying so was shown only *before* you had imported anything, so the people who needed it never saw it. That explanation now appears in both cases. To import a second map, make it active on the robot first, then press the button.
+
+- **A map whose name had a stray space could not be imported at all.** Vacuum Agent stored the map under its trimmed name and then looked it up untrimmed, so it matched nothing, and the diagnostics blamed the Active Map role for pointing at the wrong entity when it was pointing at exactly the right one. Leading and trailing spaces are now ignored when matching a map. Capitalisation still matters, since two maps may be named deliberately that way.
+
+
 ## [2.2.2] - 2026-10-04
 
 Most of these came out of [#61](https://github.com/kingchddg901/Vacuum_Agent/issues/61) — thanks to **@mactron254** for the report, the entity list and the diagnostics, without which the battery and estimate problems below would not have been findable at all. Two more surfaced on a live box and in a pre-release audit while the others were being verified.

@@ -38,7 +38,7 @@ from custom_components.eufy_vacuum.setup.drift import (
     update_drift_history,
 )
 
-from .conftest import setup_map
+from .conftest import seed_discovery, setup_map
 
 
 _VAC = "vacuum.alfred"
@@ -386,3 +386,106 @@ def test_empty_discovery_pass_does_not_create_a_setup_progress_record(manager):
     update_drift_history(manager, _VAC, discovered_room_ids=set())
 
     assert _VAC not in manager.data.get("setup_progress", {})
+
+
+# ---------------------------------------------------------------------------
+# [DR-SCOPE-1] — [DR-SCOPE-4]  drift is per MAP (and the sweep is not)
+#
+# Reported 2026-10-05, the first time a map switch was possible on a multi-map
+# Roborock: switching floors flagged every room of the map you just left as missing.
+# They were not missing. Both entry points already TOOK a map_id and both used it to
+# scope REJECTIONS, while the configured-room set beside it was read across every map.
+#
+# ⚠ THE FIRST VERSION OF THESE TESTS DID NOT BITE. They built both maps with
+# `setup_map`, whose factory numbers rooms 1..count for EVERY map — so the scoped and
+# unscoped sets were identical and the assertions passed with the fix ablated. The maps
+# must carry DISTINCT room ids or there is nothing for the scoping to change.
+# ---------------------------------------------------------------------------
+
+def _two_maps_distinct_ids(manager):
+    """Map 'A' with rooms 1-2, map 'B' with rooms 7-8. Distinct on purpose."""
+    for map_id, ids in (("A", (1, 2)), ("B", (7, 8))):
+        rooms = [{"room_id": i, "map_id": map_id, "name": f"Room {i}"} for i in ids]
+        seed_discovery(manager, _VAC, map_id, rooms)
+        manager.save_managed_rooms(vacuum_entity_id=_VAC, map_id=map_id)
+        for room in manager.data["maps"][_VAC][map_id]["rooms"].values():
+            room["is_configured"] = True
+    return {"A": {1, 2}, "B": {7, 8}}
+
+
+def test_dr_scope_0_the_fixture_can_tell_the_maps_apart(manager):
+    """[DR-SCOPE-0] Guard on the guard. If both maps carried the same room ids this
+    whole block would pass against a broken implementation, which is what the first
+    version of it did."""
+    ids = _two_maps_distinct_ids(manager)
+    assert ids["A"].isdisjoint(ids["B"]), "the maps must differ or nothing is proved"
+
+
+def test_dr_scope_1_a_pass_against_one_map_does_not_strike_the_other(manager):
+    """[DR-SCOPE-1] THE RED INPUT. A readable pass against map B sees B's rooms and
+    none of A's — because A is a different floor, not a floor that lost its rooms.
+    The strikes land in PERSISTED counters, so the false misses never heal."""
+    _two_maps_distinct_ids(manager)
+
+    update_drift_history(manager, _VAC, discovered_room_ids={7, 8}, map_id="B")
+
+    history = manager.data["setup_progress"][_VAC]["room_drift_history"]
+    struck = {rid for rid, h in history.items() if h.get("missing_passes", 0) > 0}
+    assert not struck, f"a pass against map B struck map A's rooms: {sorted(struck)}"
+
+
+def test_dr_scope_2_the_other_maps_rooms_are_not_reported_removed(manager):
+    """[DR-SCOPE-2] The read side, which is what the user sees: the panel listed the
+    rooms of the map they had just left as missing."""
+    _two_maps_distinct_ids(manager)
+    for _ in range(3):
+        update_drift_history(manager, _VAC, discovered_room_ids={7, 8}, map_id="B")
+
+    drift = compute_room_drift(manager, _VAC, discovered_room_ids={7, 8}, map_id="B")
+
+    assert drift["removed_rooms"] == [], (
+        f"rooms from another map reported as removed: {drift['removed_rooms']}"
+    )
+
+
+def test_dr_scope_3_omitting_the_map_still_unions_every_map(manager):
+    """[DR-SCOPE-3] The documented contract, pinned so the fix cannot narrow it: a
+    whole-vacuum status read naming no map still considers every map's rooms."""
+    _two_maps_distinct_ids(manager)
+    from custom_components.eufy_vacuum.setup.drift import _list_configured_room_ids
+
+    assert _list_configured_room_ids(manager, _VAC, map_id="B") == {7, 8}
+    assert _list_configured_room_ids(manager, _VAC, map_id="A") == {1, 2}
+    assert _list_configured_room_ids(manager, _VAC) == {1, 2, 7, 8}
+
+
+def test_dr_scope_4_a_pass_against_one_map_does_not_erase_the_others_history(manager):
+    """[DR-SCOPE-4] THE REGRESSION THE SCOPING FIX INTRODUCED, caught in pre-release
+    review rather than by this suite.
+
+    `_list_configured_room_ids` answers two different questions in `update_drift_history`.
+    "Which rooms does THIS pass judge?" is per-map — that is the fix. But the stale-key
+    sweep underneath asks "which history keys still matter ANYWHERE", and scoping that
+    one too made every pass delete the other map's entire drift history. The counters
+    would reset on each floor switch, so a genuinely removed room could never accumulate
+    the strikes it needs to be reported at all.
+    """
+    _two_maps_distinct_ids(manager)
+
+    # A pass against map A that misses room 1 — a real strike against a real room.
+    # The progress record does not exist until the first pass writes it, so the history
+    # is read AFTER this call, not before (the first version of this test read it first
+    # and died on a KeyError — identically with and without the fix, which made its
+    # ablation worthless).
+    update_drift_history(manager, _VAC, discovered_room_ids={2}, map_id="A")
+    history = manager.data["setup_progress"][_VAC]["room_drift_history"]
+    assert history["1"]["missing_passes"] == 1, "setup: map A's room 1 must be struck"
+
+    # Now the user switches floors. A pass against B must not touch A's bookkeeping.
+    update_drift_history(manager, _VAC, discovered_room_ids={7, 8}, map_id="B")
+
+    history = manager.data["setup_progress"][_VAC]["room_drift_history"]
+    assert "1" in history, "map A's drift history was erased by a pass against map B"
+    assert history["1"]["missing_passes"] == 1, (
+        "map A's strike count must survive a pass against another map"
+    )

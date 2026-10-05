@@ -34,6 +34,10 @@ Coverage targets
 [RD-ANCHOR-3] ...and when the map set is not enumerable (boot window) no judgement is
         made at all -- the ablation target: an unconditional check breaks every restart.
 [RD-ANCHOR-4] ...and a flat_list brand is never validated; it carries no map identity.
+[RD-ANCHOR-5] ISSUE #62: a map name with surrounding whitespace is the SAME map. The
+        cache strips it; this resolver did not, so a real map matched nothing.
+[RD-ANCHOR-6] ...and the canonical form is what comes back, not the raw state.
+[RD-ANCHOR-7] ...but normalisation is whitespace ONLY -- case stays significant.
         a phantom map for a novel device whose sensor hasn't materialised yet).
 """
 
@@ -612,3 +616,47 @@ def test_rd_anchor_4_flat_list_brand_is_never_validated(hass, manager):
     hass.states.async_set("sensor.alfred_map", "2026-10-02 11:04:35")
     hass.states.async_set(_VAC, "docked", {"segments": [{"id": 4, "name": "Den"}]})
     assert get_active_map_id(hass, _VAC) == "2026-10-02 11:04:35"
+
+
+def test_rd_anchor_5_trailing_whitespace_is_the_same_map(hass, manager):
+    """[RD-ANCHOR-5] ISSUE #62, from a real German install.
+
+    `rooms/source_refresh.py` strips a map name before using it as the cache key. This
+    resolver compared the SELECTOR'S RAW STATE against those stripped keys, so a map
+    named "Obergeschoss " was cached under "Obergeschoss", looked up as "Obergeschoss ",
+    matched nothing, and MAP-ANCHOR-1 then refused it as "not a map id" -- telling the
+    owner his correctly-bound role pointed at the wrong entity. He could never import
+    that map, and nothing about his configuration was wrong.
+    """
+    _per_map_adapter()
+    hass.states.async_set("sensor.alfred_map", "Obergeschoss ")   # the selector's value
+    hass.states.async_set(_VAC, "docked", {"rooms": {
+        "Erdgeschoss":  [{"id": 1, "name": "Wohnzimmer"}],
+        "Obergeschoss": [{"id": 9, "name": "Schlafzimmer"}],      # the cached key
+    }})
+    assert get_active_map_id(hass, _VAC) == "Obergeschoss", (
+        "a map whose only difference is invisible whitespace was refused"
+    )
+    assert [r["room_id"] for r in discover_rooms_for_vacuum(hass, vacuum_entity_id=_VAC)] == [9]
+
+
+def test_rd_anchor_6_the_canonical_form_is_returned(hass, manager):
+    """[RD-ANCHOR-6] Matching on the normalised value and returning the raw one would
+    move the failure rather than fix it -- every downstream lookup is keyed on the
+    stripped name."""
+    _per_map_adapter()
+    hass.states.async_set("sensor.alfred_map", "  Upstairs  ")
+    hass.states.async_set(_VAC, "docked", {"rooms": {"Upstairs": [{"id": 3, "name": "Loft"}]}})
+    assert get_active_map_id(hass, _VAC) == "Upstairs"
+
+
+def test_rd_anchor_7_case_is_still_significant(hass, manager):
+    """[RD-ANCHOR-7] The limit of the normalisation, pinned so it cannot quietly widen.
+    "junk map" and "Junk map" may be two deliberate maps; a vendor app that allows both
+    allows the distinction. Only the difference a user cannot SEE is normalised away."""
+    _per_map_adapter()
+    hass.states.async_set("sensor.alfred_map", "upstairs")
+    hass.states.async_set(_VAC, "docked", {"rooms": {"Upstairs": [{"id": 3, "name": "Loft"}]}})
+    assert get_active_map_id(hass, _VAC) is None, (
+        "case-folding would merge two maps a user deliberately named differently"
+    )

@@ -78,7 +78,7 @@ from ..const import (
 from ..jobs import stuck_watch
 from ..learning.utils import read_cleaning_area_m2
 from .run_state import is_non_cleaning_vacuum_state
-from ..entity_helpers import get_floor_type_label, is_blank_state
+from ..entity_helpers import get_floor_type_label, is_blank_state, normalize_map_id
 from ..jobs.job_monitor import (
     build_job_metadata_from_payload,
     build_start_blocker_from_lifecycle,
@@ -6291,7 +6291,21 @@ class EufyVacuumManager:
                 ungrounded, reason = False, None
             return {
                 "entity_id": select_entity_id,
+                # RAW, deliberately: the card pairs this with `options` to mark the
+                # selected <option>, and those option strings are sent straight back to
+                # `select.select_option`, which matches them exactly. Normalising here
+                # would stop a whitespace-named map showing as selected and could make
+                # the pick fail.
                 "current": state.state if available else None,
+                # CANONICAL, for anything using this as a MAP IDENTITY rather than as
+                # display text. Added in pre-release review: the card's `activeMapId()`
+                # had started reading `current` and comparing it with === against stored
+                # map keys, which are stripped (`rooms/source_refresh.py`). On the exact
+                # install the whitespace fix exists for, that returned an EMPTY room list
+                # and refused to start a clean -- one fix undoing the other. Two fields
+                # because they answer two questions; one field could only be wrong for
+                # one of them.
+                "current_map_id": normalize_map_id(state.state) if available else None,
                 "options": list(state.attributes.get("options") or []),
                 "available": available,
                 "frame_ungrounded": ungrounded,

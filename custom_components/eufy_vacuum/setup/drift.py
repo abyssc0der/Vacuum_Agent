@@ -81,6 +81,7 @@ from ..adapters.registry import get_adapter_config
 from ..const import DATA_RUNTIME, DOMAIN
 from ..learning.utils import _iso_now
 from ..core.vacuum_identity import is_real_vacuum
+from ..entity_helpers import is_blank_state, normalize_map_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -431,12 +432,17 @@ def active_map_configured(manager: Any, vacuum_entity_id: str) -> bool | None:
     if not am_entity:
         return None
     state = manager.hass.states.get(am_entity)
-    if state is None or state.state in ("unknown", "unavailable", "", None):
+    if state is None or is_blank_state(state.state):
         return None
+    # The FOURTH copy of "are these the same map?", found in pre-release review in the
+    # same file the scoping fix touched. The buckets are keyed on the STRIPPED name
+    # (`rooms/source_refresh.py` strips before caching), so a raw lookup misses a map
+    # whose name carries surrounding whitespace -- and missing here returns False, which
+    # re-opens the save_rooms step against a map that is configured perfectly well.
     bucket = (
         manager.data.get("maps", {})
         .get(vacuum_entity_id, {})
-        .get(str(state.state))
+        .get(normalize_map_id(state.state))
     )
     if not isinstance(bucket, dict):
         return False
@@ -447,17 +453,36 @@ def active_map_configured(manager: Any, vacuum_entity_id: str) -> bool | None:
 
 
 def _list_configured_room_ids(
-    manager: Any, vacuum_entity_id: str
+    manager: Any, vacuum_entity_id: str, map_id: str | None = None
 ) -> set[int]:
-    """Every configured room ID across all maps for one vacuum.
+    """The configured room IDs for one vacuum, scoped to ``map_id`` when given.
 
     A room is "configured" iff `is_configured` is True. The migration
     shim stamps existing rooms True; new rooms enter False and require
     the save_rooms step to flip them.
+
+    ⚠ ``map_id`` DID NOT EXIST HERE UNTIL 2026-10-05. Both callers already HAD a map
+    and used it to scope rejections -- and the comment in `setup/status.py` argues at
+    length why leaving the map unset there would be wrong. The configured set beside it
+    was fetched across EVERY map anyway, so a discovery pass against one map saw every
+    room of every OTHER map as absent: switching floors reported the rooms you just left
+    as missing. They were not missing, they were on the other map, which is where they
+    live.
+
+    Two halves of one question, one scoped and one not
+    [[feedback_partial_guard_blind_spot]]. The counters are persisted, so the false
+    strikes accumulated: enough switches and the other map's rooms stay listed as
+    removed. Nothing deletes on that list -- it reaches the status payload and no
+    further -- but it is wrong on screen and it does not heal itself.
+
+    Omitted, this still unions every map: the documented whole-vacuum status read.
     """
     out: set[int] = set()
     vac_maps = manager.data.get("maps", {}).get(vacuum_entity_id, {}) or {}
-    for bucket in vac_maps.values():
+    _wanted = normalize_map_id(map_id) if map_id is not None else None
+    for bucket_map_id, bucket in vac_maps.items():
+        if _wanted is not None and normalize_map_id(bucket_map_id) != _wanted:
+            continue
         if not isinstance(bucket, dict):
             continue
         for room_id_key, room in (bucket.get("rooms") or {}).items():
@@ -561,7 +586,7 @@ def update_drift_history(
         # yet. That is the shape C61 was ruled on one file over: a permanent
         # recurring WARNING with nothing at stake trains people to ignore the log,
         # which is expensive precisely when a real one arrives.
-        configured = _list_configured_room_ids(manager, vacuum_entity_id)
+        configured = _list_configured_room_ids(manager, vacuum_entity_id, map_id=map_id)
         log = _LOGGER.warning if configured else _LOGGER.debug
         log(
             "discovery: pass for %s (map %s) discovered NO rooms — classifying it "
@@ -578,13 +603,24 @@ def update_drift_history(
     history: dict[str, dict[str, Any]] = record["room_drift_history"]
     now = _iso_now()
 
-    configured_ids = _list_configured_room_ids(manager, vacuum_entity_id)
+    # TWO DIFFERENT QUESTIONS, and scoping both to this map was a regression caught in
+    # pre-release review. "Which rooms does THIS pass judge?" is per-map: a pass against
+    # map B must not strike map A's rooms, which is the bug this scoping fixes. But
+    # "which history keys are still worth keeping?" is per-VACUUM, and the sweep below
+    # says so in as many words -- "rooms that no longer exist ANYWHERE". Scoped, that
+    # sweep deletes the other map's entire drift history on every single pass, so the
+    # counters would reset each time the user switched floors and a genuinely removed
+    # room could never accumulate its strikes.
+    configured_ids = _list_configured_room_ids(manager, vacuum_entity_id, map_id=map_id)
+    all_configured_ids = _list_configured_room_ids(manager, vacuum_entity_id)
     rejected_ids = rejected_room_ids(record, map_id=map_id)
 
     # Update history for every room the framework cares about — both
     # configured and newly-discovered. Rejected rooms never enter the
     # history (they're explicitly out of scope).
     relevant_ids = (configured_ids | discovered_room_ids) - rejected_ids
+    # What the stale sweep may keep: every map's rooms, not just this one's.
+    retainable_ids = (all_configured_ids | discovered_room_ids) - rejected_ids
 
     for rid in relevant_ids:
         key = str(rid)
@@ -625,7 +661,7 @@ def update_drift_history(
             rid = int(key)
         except (TypeError, ValueError):
             continue
-        if rid not in relevant_ids:
+        if rid not in retainable_ids:
             stale_keys.append(key)
     for key in stale_keys:
         history.pop(key, None)
@@ -666,7 +702,7 @@ def compute_room_drift(
     cadence = get_discovery_cadence(vacuum_entity_id)
     history: dict[str, dict[str, Any]] = record["room_drift_history"]
     rejected_ids = rejected_room_ids(record, map_id=map_id)
-    configured_ids = _list_configured_room_ids(manager, vacuum_entity_id)
+    configured_ids = _list_configured_room_ids(manager, vacuum_entity_id, map_id=map_id)
     lookup = _room_lookup(manager, vacuum_entity_id)
 
     n_remove = cadence["removal_confirmation_passes"]

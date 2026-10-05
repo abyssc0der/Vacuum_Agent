@@ -42,6 +42,27 @@ def is_blank_state(value: Any) -> bool:
     return str(value).strip().lower() in BLANK_STATE_VALUES
 
 
+def normalize_map_id(value: Any) -> str:
+    """The canonical form of a map id, for both STORING one and LOOKING one up.
+
+    THE question — "are these the same map?" — rather than a bare ``.strip()`` each
+    caller re-decides, which is how issue #62 happened. ``rooms/source_refresh.py``
+    stripped the map name before using it as the cache key AND stripped the active map
+    id beside it, so that module agreed with itself; ``rooms/room_discovery.py`` then
+    compared the SELECTOR'S RAW STATE against those stripped keys. A Roborock user whose
+    map was named ``"Obergeschoss "`` had it cached under ``"Obergeschoss"`` and looked
+    up as ``"Obergeschoss "``, so it matched nothing and his second map could never be
+    imported. Nothing was wrong with his configuration; Vacuum Agent disagreed with
+    itself across two files.
+
+    Surrounding whitespace only. NOT case, and NOT internal spacing: "Junk map" and
+    "junk map" may well be two deliberate maps, and a vendor app that permits both
+    permits the distinction. Trailing whitespace is the one difference a user cannot see
+    and did not mean.
+    """
+    return str(value).strip() if value is not None else ""
+
+
 def _friendly_vacuum_name(vacuum_entity_id: str) -> str:
     """Return a title-cased display name derived from the vacuum entity_id's object_id."""
     object_id = vacuum_entity_id.split(".", 1)[1]

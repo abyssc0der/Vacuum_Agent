@@ -340,7 +340,48 @@ export function applyRoomsState(proto) {
      MAP RESOLUTION
      ========================================================= */
 
+  /**
+   * Which map the card is looking at.
+   *
+   * RUNG 1 IS THE BACKEND'S ANSWER. The integration resolves the active map through the
+   * DECLARED `entities.active_map` role and ships it on the dashboard snapshot as
+   * `map_switcher.current_map_id` -- already whitespace-normalised, which matters
+   * because the value is compared with === against stored map keys and those are
+   * stripped. The card re-derived all of this itself, two rungs down, both wrong off
+   * Eufy:
+   *
+   *   - `ENTITY.activeMap` builds `sensor.<object_id>_active_map`, EUFY's shape and only
+   *     Eufy's. Roborock and Dreame declare a `select`, so it resolves to nothing there
+   *     -- the same hardcoding fixed in the backend's `_compute_map_frame_gate` and
+   *     `_resolve_map_switcher` (issue #61) while this copy was left behind.
+   *   - the room-switch fallback returns `switches[0].attributes.map_id`: the FIRST room
+   *     switch in `Object.entries(hass.states)` order, which is arbitrary. With two maps
+   *     it answers with whichever was enumerated first, so a vacuum with 10 rooms on map
+   *     A and 2 on map B reports map A no matter which is active.
+   *
+   * That was issue #64: the switcher changed, the modal (opened with an explicit map id,
+   * so it never calls this) showed the right rooms, and the main list kept rendering the
+   * other map's. Measured live: backend 'Junk map', card 'Main floor'.
+   *
+   * ⚠ TWO EARLIER VERSIONS OF THIS RUNG WERE WRONG, both caught after the fact:
+   *   1. it read `snapshot.active_map_id`, a field that lives on `get_lifecycle_state()`
+   *      and `get_start_status()` and NOT on this payload, so the rung silently did
+   *      nothing. The unit test stubs `dashboardSnapshot()`, so it proved this code reads
+   *      a field when present and nothing about whether the backend sends it.
+   *   2. it then read `map_switcher.current`, which is the RAW selector state kept raw
+   *      on purpose for the dropdown. Comparing that with === against stripped map keys
+   *      gave an EMPTY room list on a whitespace-named map -- the whitespace fix and this
+   *      one cancelling out. `current_map_id` is the canonical twin added for this.
+   *
+   * The lower rungs are KEPT, not replaced: the snapshot is absent on first paint and
+   * during a reconnect, and Eufy has always resolved correctly through rung 2.
+   */
   proto.activeMapId = function () {
+    const fromSnapshot = this.dashboardSnapshot?.()?.map_switcher?.current_map_id;
+    if (fromSnapshot && !INVALID_STATES.has(String(fromSnapshot))) {
+      return String(fromSnapshot);
+    }
+
     const entityId = ENTITY.activeMap(this.vacuumEntityId());
     const raw = this.stateOf(entityId);
 

@@ -38,7 +38,7 @@ from .debug_capture import _redact
 # self-check has to reject exactly the same set or it reports "everything works"
 # for a device the importer will refuse. See _self_check.
 from .rooms.room_discovery import _ACTIVE_MAP_SENTINELS
-from .entity_helpers import is_blank_state
+from .entity_helpers import is_blank_state, normalize_map_id
 
 # Keys whose values may carry secrets. entity_ids and map_ids are NOT secret and
 # are needed for support, so they are deliberately NOT redacted.
@@ -224,13 +224,19 @@ def _self_check(out: dict[str, Any]) -> dict[str, Any]:
     # wrong, the list was empty when it ran". A device that has genuinely never been
     # mapped also lands here, and `has_rooms` already answers that through its other
     # terms. Judge only against a map set we actually have.
+    # ISSUE #62 — normalised on BOTH sides, the same question `get_active_map_id` asks.
+    # This was the THIRD raw copy of "are these the same map?"; left alone it would have
+    # gone on reporting an install as mis-bound after the resolver had stopped rejecting
+    # it, which is the worst of both — a working vacuum with a diagnostic that says it is
+    # broken, and the diagnostic is what a maintainer reads first.
     _enumerated_map_ids = {
-        str(_m.get("map_id"))
+        normalize_map_id(_m.get("map_id"))
         for _m in ((out.get("maps") or {}).get("maps") or [])
         if isinstance(_m, dict) and _m.get("map_id") is not None
     }
     active_map_names_a_real_map = (
-        not _enumerated_map_ids or active_map_state in _enumerated_map_ids
+        not _enumerated_map_ids
+        or normalize_map_id(active_map_state) in _enumerated_map_ids
     )
     active_map_usable = (
         has_active_map_entity

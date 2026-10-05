@@ -72,7 +72,7 @@ from .source_refresh import (
     select_segments_for_map,
 )
 from ..adapters.registry import get_adapter_config
-from ..entity_helpers import BLANK_STATE_VALUES, is_blank_state
+from ..entity_helpers import BLANK_STATE_VALUES, is_blank_state, normalize_map_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -175,7 +175,13 @@ def get_active_map_id(hass: HomeAssistant, vacuum_entity_id: str) -> str | None:
                 # Validating then would reject a VALID id on every restart, so the guard
                 # only fires against a map set we actually have.
                 known = _known_map_ids(hass, vacuum_entity_id, config)
-                if known is not None and str(value) not in known:
+                # ISSUE #62 — normalise BOTH sides. `source_refresh` already strips the
+                # name it caches under, so comparing this entity's raw state against
+                # those keys fails on any map whose name carries surrounding whitespace,
+                # and [MAP-ANCHOR-1] then refuses it as "not a map id". It is a real map
+                # and the only difference is invisible.
+                _value = normalize_map_id(value)
+                if known is not None and _value not in {normalize_map_id(k) for k in known}:
                     # WARN ONCE PER MIS-BOUND ROLE, not once per resolution. This
                     # resolver runs on a ~60s timer, so an unthrottled warning gives the
                     # one user it exists for ~1440 identical lines a day, per vacuum,
@@ -207,7 +213,13 @@ def get_active_map_id(hass: HomeAssistant, vacuum_entity_id: str) -> str | None:
                 # latch that never clears. A warn-once set that is never cleared is the
                 # shape that silently stops reporting real recurrences.
                 _MISBOUND_ACTIVE_MAP_WARNED.discard((vacuum_entity_id, active_map_entity))
-                return str(value)
+                # Return the CANONICAL form, not the raw state. Matching on the
+                # normalised value and then handing back the unnormalised one would move
+                # the failure rather than fix it: every downstream lookup -- the room
+                # cache, managed_rooms_by_map, the per-map camera slug -- is keyed on the
+                # stripped name, so a trailing space would miss them all exactly as it
+                # missed the comparison above.
+                return _value
             # Blank/unavailable selector. The meaning depends on the room-list SHAPE:
             #
             #  * per_map_mapping (Dreame): this is the STEADY state of a SINGLE-map
