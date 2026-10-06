@@ -22,7 +22,7 @@ export const maintenanceModalHostStyles = `
     padding: 14px;
     border-radius: var(--evcc-radius-inner, 10px);
     border: 1px solid var(--evcc-border-default);
-    background: color-mix(in srgb, var(--evcc-surface-raised) 92%, white 8%);
+    background: color-mix(in srgb, var(--evcc-surface-raised) 92%, var(--evcc-overlay-ink) 8%);
   }
 
   .evcc-maintenance-modal-hero--status-good {
@@ -435,7 +435,7 @@ export const maintenanceStyles = `
     padding: 14px;
     border-radius: var(--evcc-radius-inner, 8px);
     border: 1px solid var(--evcc-border-default);
-    background: color-mix(in srgb, var(--evcc-surface-raised) 92%, white 8%);
+    background: color-mix(in srgb, var(--evcc-surface-raised) 92%, var(--evcc-overlay-ink) 8%);
     width: 100%;
     text-align: start;
     cursor: pointer;

@@ -17,6 +17,11 @@ import {
   chipRow, sliderRow, SLIDER_ROW_CSS, callResponse, registerCard, defineCard, stripNull,
   renderLangControl, wireLangControl, LANG_CSS, getStoredLang, setStoredLang,
 } from "./_shared.js";
+// ISSUE #65 -- this card owns its CSS and shipped with NO --evcc-* defined, so every
+// evcc token reference in it fell through to its white-alpha fallback and the card rendered
+// invisible on a light HA theme. Same gap as the standalone map embed, same repair:
+// define the tokens here rather than re-inking each fallback.
+import { foundationTokens } from "../styles/foundation.js";
 import { emptyArmed, nextArmed, planStart, armedIsValid } from "./dashboard-dispatch.js";
 import { draftsToNormalizedRects, normRotation, ZONE_MAX_FALLBACK } from "./zone-geometry.js";
 import { dashboardSuggestion } from "./card-suggestions.js";
@@ -437,7 +442,7 @@ class EufyDashboardCard extends HTMLElement {
     const armedSomething = this._armed.source != null || onCount > 0;
 
     this.shadowRoot.innerHTML = `
-      <style>${CARD_CSS}${LANG_CSS}</style>
+      <style>${foundationTokens}${CARD_CSS}${LANG_CSS}</style>
       <div class="card">
         ${this._renderHeader(title, vacuumState)}
         ${this._renderMapSection()}

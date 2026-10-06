@@ -475,7 +475,7 @@ export const setupStyles = `
     font-weight:   600;
     background:    color-mix(in srgb, var(--evcc-sem-warning, #f59e0b) 14%, transparent);
     border:        1px solid color-mix(in srgb, var(--evcc-sem-warning, #f59e0b) 32%, transparent);
-    color:         color-mix(in srgb, var(--evcc-sem-warning, #f59e0b) 90%, white 10%);
+    color:         color-mix(in srgb, var(--evcc-sem-warning, #f59e0b) 90%, var(--evcc-overlay-ink) 10%);
     white-space:   nowrap;
   }
 

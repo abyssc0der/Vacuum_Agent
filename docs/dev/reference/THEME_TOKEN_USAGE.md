@@ -8,15 +8,15 @@
 
 For each catalog token (`--evcc-*`): its **default** declaration, every real **consumer** `var()` (CSS property + file:line), and JS `setProperty` apply sites. Multiline-aware (handles `var(` wrapped across lines); scans `src/`, the `animal-svg/` module, and the Python preloaded themes. The self-referential seed (`--evcc-x: var(--evcc-x, fallback)`) is the default, not a use.
 
-- Catalog **425** · consumer `var()` uses **2380**
+- Catalog **425** · consumer `var()` uses **2383**
 - **277** with a STATIC consumer · **148** consumed DYNAMICALLY (constructed names, below) · **0** with no consumer at all
-- `var()` → non-catalog tokens **12** · dynamic `var(--evcc-…${…})` sites **3**
+- `var()` → non-catalog tokens **13** · dynamic `var(--evcc-…${…})` sites **3**
 
 > **A token with no STATIC consumer is not dead.** This tracer is a regex scan and cannot follow a `var()` whose name is built at runtime, so 148 live tokens would otherwise read as rot — and deleting them would break theming for every animal, every floor material and the whole room palette. The families that construct their names:
 > - **98** `animal` — `src/theme-tokens/animals.js` builds `--evcc-animal-${animal}-${suffix}`; consumed in `animal-svg/`
 > - **38** `floor-material` — `src/renderers/floor-texture-surface.js` and `src/bindings/map.js` build `--evcc-floor-${type}-…` from the material key
 > - **12** `room-fill` — `src/cards/map-room-color.js` — `roomFillTokenName(i)` builds `--evcc-room-fill-N`, 1-based and wrapping at 12 (contract pinned by MRC-1..MRC-7)
-- **Token CSS coverage 98.8%** — 1435/1453 color declarations resolve through a token (18 deliberate `theme-lint-ignore`, **0 stray**); **100.0%** of colors that should be themed. Scope: `src/styles/*` (minus token defs) + the standalone cards; guarded by `scripts/check-styles.mjs`.
+- **Token CSS coverage 98.8%** — 1436/1454 color declarations resolve through a token (18 deliberate `theme-lint-ignore`, **0 stray**); **100.0%** of colors that should be themed. Scope: `src/styles/*` (minus token defs) + the standalone cards; guarded by `scripts/check-styles.mjs`.
 
 ---
 
@@ -96,7 +96,7 @@ For each catalog token (`--evcc-*`): its **default** declaration, every real **c
 - src/styles/setup.js (color)
 - src/styles/shell.js (color)
 
-**`--evcc-text-muted`** — Text Muted · default `rgba(240,242,245,0.48)` src/styles/foundation.js, src/styles/modal-host.js
+**`--evcc-text-muted`** — Text Muted · default `color-mix(in srgb, var(--evcc-text-primary) 58%, var(--evcc-surface-base))` src/styles/foundation.js, src/styles/modal-host.js
 - custom_components/eufy_vacuum/themes/preloaded.py
 - src/cards/_shared.js (color)
 - src/cards/dashboard-card.js (--text-muted)
@@ -250,11 +250,11 @@ For each catalog token (`--evcc-*`): its **default** declaration, every real **c
 - src/styles/saved-zones.js
 - src/styles/theme-preview.js
 
-**`--evcc-surface-action`** — Surface Action · default `rgba(255,255,255,0.10)` src/styles/foundation.js
+**`--evcc-surface-action`** — Surface Action · default `color-mix(in srgb, var(--evcc-overlay-ink) 10%, transparent)` src/styles/foundation.js
 - src/styles/learning.js (background)
 - src/styles/map.js (background)
 
-**`--evcc-surface-action-hover`** — Surface Action Hover · default `rgba(255,255,255,0.18)` src/styles/foundation.js
+**`--evcc-surface-action-hover`** — Surface Action Hover · default `color-mix(in srgb, var(--evcc-overlay-ink) 18%, transparent)` src/styles/foundation.js
 - src/cards/_shared.js (background)
 - src/cards/dashboard-card.js (background)
 - src/room-card.js (background)
@@ -266,6 +266,7 @@ For each catalog token (`--evcc-*`): its **default** declaration, every real **c
 - custom_components/eufy_vacuum/themes/preloaded.py
 - src/styles/foundation.js (--evcc-surface-card)
 - src/styles/foundation.js
+- src/styles/index.js (background-color)
 - src/styles/modal-host.js (--evcc-modal-bg)
 - src/styles/theme.js (background)
 - src/styles/theme.js
@@ -286,10 +287,10 @@ For each catalog token (`--evcc-*`): its **default** declaration, every real **c
 - src/styles/theme.js (background)
 - src/styles/theme.js
 
-**`--evcc-surface-chip`** — Surface Chip · default `rgba(255,255,255,0.09)` src/styles/foundation.js
+**`--evcc-surface-chip`** — Surface Chip · default `color-mix(in srgb, var(--evcc-overlay-ink) 9%, transparent)` src/styles/foundation.js
 - src/styles/learning.js (background)
 
-**`--evcc-surface-input`** — Surface Input · default `rgba(255,255,255,0.06)` src/styles/foundation.js, src/styles/modal-host.js
+**`--evcc-surface-input`** — Surface Input · default `color-mix(in srgb, var(--evcc-overlay-ink) 6%, transparent)` src/styles/foundation.js, src/styles/modal-host.js
 - custom_components/eufy_vacuum/themes/preloaded.py
 - src/cards/profile-card.js (--surface-input)
 - src/styles/external-jobs.js (background)
@@ -322,7 +323,7 @@ For each catalog token (`--evcc-*`): its **default** declaration, every real **c
 - src/styles/mobile.js (background)
 - src/styles/modal-host.js (--evcc-modal-backdrop-bg)
 
-**`--evcc-surface-panel`** — Surface Panel · default `color-mix(in srgb, var(--evcc-surface-base) 85%, white 15%)` src/styles/foundation.js, src/styles/modal-host.js
+**`--evcc-surface-panel`** — Surface Panel · default `color-mix(in srgb, var(--evcc-surface-base) 85%, var(--evcc-overlay-ink) 15%)` src/styles/foundation.js, src/styles/modal-host.js
 - custom_components/eufy_vacuum/themes/preloaded.py
 - src/styles/base-station.js (background)
 - src/styles/external-jobs.js (background)
@@ -353,7 +354,7 @@ For each catalog token (`--evcc-*`): its **default** declaration, every real **c
 - src/styles/theme.js (background)
 - src/styles/theme.js
 
-**`--evcc-surface-raised`** — Surface Raised · default `color-mix(in srgb, var(--evcc-surface-base) 92%, white 8%)` src/styles/foundation.js
+**`--evcc-surface-raised`** — Surface Raised · default `color-mix(in srgb, var(--evcc-surface-base) 92%, var(--evcc-overlay-ink) 8%)` src/styles/foundation.js
 - custom_components/eufy_vacuum/themes/preloaded.py
 - src/styles/base-station.js (background)
 - src/styles/base-station.js
@@ -369,7 +370,7 @@ For each catalog token (`--evcc-*`): its **default** declaration, every real **c
 - src/styles/shell.js (background)
 - src/styles/toast-host.js (background)
 
-**`--evcc-surface-subtle`** — Surface Subtle · default `rgba(255,255,255,0.04)` src/styles/foundation.js
+**`--evcc-surface-subtle`** — Surface Subtle · default `color-mix(in srgb, var(--evcc-overlay-ink) 4%, transparent)` src/styles/foundation.js
 - src/cards/_shared.js
 - src/cards/dashboard-card.js (background)
 - src/room-card.js (--surface-subtle)
@@ -395,7 +396,7 @@ For each catalog token (`--evcc-*`): its **default** declaration, every real **c
 
 ## Borders & Shadows  ·  7 static / 7
 
-**`--evcc-border-default`** — Border Default · default `rgba(255,255,255,0.10)` src/styles/foundation.js, src/styles/modal-host.js
+**`--evcc-border-default`** — Border Default · default `color-mix(in srgb, var(--evcc-overlay-ink) 10%, transparent)` src/styles/foundation.js, src/styles/modal-host.js
 - custom_components/eufy_vacuum/themes/preloaded.py
 - src/cards/_shared.js
 - src/cards/dashboard-card.js (--border)
@@ -434,7 +435,7 @@ For each catalog token (`--evcc-*`): its **default** declaration, every real **c
 - src/styles/theme.js
 - src/styles/toast-host.js
 
-**`--evcc-border-strong`** — Border Strong · default `rgba(255,255,255,0.18)` src/styles/foundation.js, src/styles/modal-host.js
+**`--evcc-border-strong`** — Border Strong · default `color-mix(in srgb, var(--evcc-overlay-ink) 18%, transparent)` src/styles/foundation.js, src/styles/modal-host.js
 - custom_components/eufy_vacuum/themes/preloaded.py
 - src/styles/base-station.js (border-color)
 - src/styles/foundation.js
@@ -451,7 +452,7 @@ For each catalog token (`--evcc-*`): its **default** declaration, every real **c
 - src/styles/theme-preview.js
 - src/styles/theme.js (border-color)
 
-**`--evcc-border-subtle`** — Border Subtle · default `rgba(255,255,255,0.06)` src/styles/foundation.js, src/styles/modal-host.js
+**`--evcc-border-subtle`** — Border Subtle · default `color-mix(in srgb, var(--evcc-overlay-ink) 6%, transparent)` src/styles/foundation.js, src/styles/modal-host.js
 - custom_components/eufy_vacuum/themes/preloaded.py
 - src/styles/base-station.js
 - src/styles/job-summary.js
@@ -1868,11 +1869,12 @@ None — every catalog token is consumed, statically or dynamically.
 
 ---
 
-## var() → non-catalog tokens  ·  12
+## var() → non-catalog tokens  ·  13
 
 Used in CSS but not in the editor registry (dynamic fragments or intentional internals like `--evcc-grp`).
 
 - `--evcc-animal-X` — custom_components/eufy_vacuum/frontend/animal-svg/animal-svg.js
+- `--evcc-overlay-ink` — src/styles/foundation.js, src/styles/maintenance.js, src/styles/review.js, src/styles/rooms.js, src/styles/setup.js
 - `--evcc-panel-offset` — src/styles/foundation.js
 - `--evcc-space-xs` — src/styles/learning.js
 - `--evcc-map-rotation` — src/styles/map.js

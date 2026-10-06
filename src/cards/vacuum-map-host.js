@@ -22,6 +22,12 @@ import { VacuumCardActions } from "../actions/index.js";
 import { applyCardDomHelpers } from "../bindings/core.js";
 import { VIEWS } from "../render-cycle.js";
 import { mapStyles } from "../styles/map.js";
+// ISSUE #65 -- the embed defines NO --evcc-* of its own, so every var() in
+// mapStyles fell through to a white-alpha literal and the whole control strip
+// went invisible on a light theme, exactly as the card did. Pull in the canonical
+// token block rather than re-inking map.js's 72 fallbacks: a fallback firing IS
+// the token being missing, so the repair belongs where the token is absent.
+import { foundationTokens } from "../styles/foundation.js";
 import { ensureLocalesLoaded } from "../i18n/index.js";
 import { ensureFontFacesInDocument } from "../styles/fonts.js";
 
@@ -269,7 +275,7 @@ class EufyVacuumMap extends HTMLElement {
           ${this._layersCollapsed ? "" : layersPanel}
         </div>` : "";
       this.shadowRoot.innerHTML =
-        `<style>:host{display:block}${mapStyles}${EMBED_CSS}</style>` +
+        `<style>:host{display:block}${foundationTokens}${mapStyles}${EMBED_CSS}</style>` +
         `<div class="evcc-map-embed">${map}` +
         `<div class="evcc-map-embed-controls">${mascot}${zonePanel}${layersSection}</div></div>`;
       this._bindings._bindMap();

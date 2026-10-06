@@ -21,7 +21,7 @@ The 5 companion sub-groups share one identical 14-token shape — only **Cat** i
 | `--evcc-tab-active-bg` | Tab Active BG | color | — |  |
 | `--evcc-tab-active-border` | Tab Active Border | color | — |  |
 | `--evcc-tab-active-text` | Tab Active Text | color | — |  |
-| `--evcc-text-muted` | Text Muted | color | `rgba(240,242,245,0.48)` |  |
+| `--evcc-text-muted` | Text Muted | color | `color-mix(in srgb, var(--evcc-text-primary) 58%, var(--evcc-surface-base))` |  |
 | `--evcc-text-on-accent` | Text On Accent | color | `#ffffff` |  |
 | `--evcc-text-primary` | Text Primary | color | `var(--primary-text-color, #f0f2f5)` |  |
 | `--evcc-text-secondary` | Text Secondary | color | `var(--secondary-text-color, rgba(240,242,245,0.72))` |  |
@@ -37,16 +37,16 @@ The 5 companion sub-groups share one identical 14-token shape — only **Cat** i
 | `--evcc-card-min-height` | Card Min Height | size | — |  |
 | `--evcc-card-padding` | Card Padding | size | — |  |
 | `--evcc-panel-bg` | Panel BG | color | `var(--evcc-surface-panel)` |  |
-| `--evcc-surface-action` | Surface Action | color | `rgba(255,255,255,0.10)` |  |
-| `--evcc-surface-action-hover` | Surface Action Hover | color | `rgba(255,255,255,0.18)` |  |
+| `--evcc-surface-action` | Surface Action | color | `color-mix(in srgb, var(--evcc-overlay-ink) 10%, transparent)` |  |
+| `--evcc-surface-action-hover` | Surface Action Hover | color | `color-mix(in srgb, var(--evcc-overlay-ink) 18%, transparent)` |  |
 | `--evcc-surface-base` | Surface Base | color | `var(--card-background-color, #1c2127)` |  |
 | `--evcc-surface-card` | Surface Card | color | `var(--evcc-surface-base)` |  |
-| `--evcc-surface-chip` | Surface Chip | color | `rgba(255,255,255,0.09)` |  |
-| `--evcc-surface-input` | Surface Input | color | `rgba(255,255,255,0.06)` |  |
+| `--evcc-surface-chip` | Surface Chip | color | `color-mix(in srgb, var(--evcc-overlay-ink) 9%, transparent)` |  |
+| `--evcc-surface-input` | Surface Input | color | `color-mix(in srgb, var(--evcc-overlay-ink) 6%, transparent)` |  |
 | `--evcc-surface-overlay` | Surface Overlay | color | `rgba(0,0,0,0.4)` |  |
-| `--evcc-surface-panel` | Surface Panel | color | `color-mix(in srgb, var(--evcc-surface-base) 85%, white 15%)` |  |
-| `--evcc-surface-raised` | Surface Raised | color | `color-mix(in srgb, var(--evcc-surface-base) 92%, white 8%)` |  |
-| `--evcc-surface-subtle` | Surface Subtle | color | `rgba(255,255,255,0.04)` |  |
+| `--evcc-surface-panel` | Surface Panel | color | `color-mix(in srgb, var(--evcc-surface-base) 85%, var(--evcc-overlay-ink) 15%)` |  |
+| `--evcc-surface-raised` | Surface Raised | color | `color-mix(in srgb, var(--evcc-surface-base) 92%, var(--evcc-overlay-ink) 8%)` |  |
+| `--evcc-surface-subtle` | Surface Subtle | color | `color-mix(in srgb, var(--evcc-overlay-ink) 4%, transparent)` |  |
 | `--evcc-surface-success` | Surface Success | color | `rgba(76,175,110,0.12)` |  |
 | `--evcc-surface-sunken` | Surface Sunken | color | `rgba(0,0,0,0.18)` |  |
 | `--evcc-surface-warning` | Surface Warning | color | `rgba(255,180,0,0.12)` |  |
@@ -55,9 +55,9 @@ The 5 companion sub-groups share one identical 14-token shape — only **Cat** i
 
 | Token | Controls | Type | Default | Range |
 |---|---|---|---|---|
-| `--evcc-border-default` | Border Default | color | `rgba(255,255,255,0.10)` |  |
-| `--evcc-border-strong` | Border Strong | color | `rgba(255,255,255,0.18)` |  |
-| `--evcc-border-subtle` | Border Subtle | color | `rgba(255,255,255,0.06)` |  |
+| `--evcc-border-default` | Border Default | color | `color-mix(in srgb, var(--evcc-overlay-ink) 10%, transparent)` |  |
+| `--evcc-border-strong` | Border Strong | color | `color-mix(in srgb, var(--evcc-overlay-ink) 18%, transparent)` |  |
+| `--evcc-border-subtle` | Border Subtle | color | `color-mix(in srgb, var(--evcc-overlay-ink) 6%, transparent)` |  |
 | `--evcc-border-success` | Border Success | color | `rgba(76,175,110,0.35)` |  |
 | `--evcc-border-warning` | Border Warning | color | `rgba(255,180,0,0.35)` |  |
 | `--evcc-shadow-card` | Shadow Card | shadow | — |  |

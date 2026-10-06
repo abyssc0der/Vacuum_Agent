@@ -35,7 +35,7 @@ import {
   VIEWS,
   VIEW_ORDER,
 } from "../src/render-cycle.js";
-import { STYLES, MODAL_HOST_STYLES } from "../src/styles/index.js";
+import { STYLES, MODAL_HOST_STYLES, applyDynamicTheme } from "../src/styles/index.js";
 import { registerLocale, applyDir } from "../src/i18n/index.js";
 import { ensureFontFacesInDocument } from "../src/styles/fonts.js";
 import { en } from "../src/i18n/en.js";
@@ -321,13 +321,17 @@ function render(view, opts = {}) {
       mobileOverlayHtml,
     });
 
-    // Apply the bundle exactly as src/styles/apply-theme.js does:
-    // inline custom properties on the shadow host.
-    for (const [key, value] of Object.entries(bundle)) {
-      if (value !== null && value !== undefined && value !== "") {
-        host.style.setProperty(key, value);
-      }
-    }
+    // CALL apply-theme's applier; do not re-implement it.
+    //
+    // This loop used to be a hand-rolled copy, with a comment saying it behaved
+    // "exactly as src/styles/apply-theme.js does". That held only while the real
+    // applier did nothing but set properties. ISSUE #65 added `syncColourScheme`
+    // to it -- the light/dark stamp every scheme-keyed rule depends on -- and a
+    // mirror cannot inherit a step it does not know about, so every harness shot,
+    // every CVD report and every visual-regression baseline would have rendered
+    // the card with NO scheme attribute and silently kept passing. A re-rendering
+    // of production is a fixture that agrees with the caller instead of the callee.
+    applyDynamicTheme(host, { tokens: bundle });
 
     // Mirror apply-theme.js step 2 (applyDynamicTheme(card._modalHost)):
     // the body-level modal host gets the resolved layer on its OWN node
@@ -336,11 +340,7 @@ function render(view, opts = {}) {
     // does on the live card.
     const modalHostEl = modalHtml ? shadow.querySelector("[data-evcc-modal-host]") : null;
     if (modalHostEl) {
-      for (const [key, value] of Object.entries(bundle)) {
-        if (value !== null && value !== undefined && value !== "") {
-          modalHostEl.style.setProperty(key, value);
-        }
-      }
+      applyDynamicTheme(modalHostEl, { tokens: bundle });
     }
 
     result.ok = true;

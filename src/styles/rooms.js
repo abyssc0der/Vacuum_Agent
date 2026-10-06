@@ -389,7 +389,7 @@ export const roomStyles = `
     padding:         var(--evcc-card-padding, 12px);
     border-radius:   var(--evcc-radius-card, 18px);
     border:          1px solid var(--evcc-border-default);
-    background:      color-mix(in srgb, var(--evcc-surface-card) 84%, white 16%);
+    background:      color-mix(in srgb, var(--evcc-surface-card) 84%, var(--evcc-overlay-ink) 16%);
     box-shadow:      var(--evcc-shadow-card, 0 6px 14px rgba(0, 0, 0, 0.14));
     transition:
       transform      var(--evcc-transition-normal, 150ms ease),
@@ -411,7 +411,7 @@ export const roomStyles = `
       linear-gradient(
         180deg,
         color-mix(in srgb, var(--evcc-accent) 14%, transparent),
-        color-mix(in srgb, var(--evcc-surface-card) 84%, white 16%)
+        color-mix(in srgb, var(--evcc-surface-card) 84%, var(--evcc-overlay-ink) 16%)
       );
     box-shadow:
       0 0 0 1px color-mix(in srgb, var(--evcc-accent) 16%, transparent),
@@ -528,14 +528,14 @@ export const roomStyles = `
     --evcc-chip-padding:     2px 8px;
     --evcc-chip-font-size:   0.73rem;
     --evcc-chip-font-weight: 500;
-    --evcc-chip-bg:          var(--evcc-room-chip-bg, rgba(255, 255, 255, 0.06));
-    --evcc-chip-border:      var(--evcc-room-chip-border, rgba(255, 255, 255, 0.10));
+    --evcc-chip-bg:          var(--evcc-room-chip-bg, color-mix(in srgb, var(--evcc-overlay-ink) 6%, transparent));
+    --evcc-chip-border:      var(--evcc-room-chip-border, color-mix(in srgb, var(--evcc-overlay-ink) 10%, transparent));
     --evcc-chip-text:        var(--evcc-room-chip-text, var(--evcc-text-secondary));
   }
 
   .evcc-room-setting-chip--profile {
-    --evcc-chip-bg:     var(--evcc-profile-chip-bg, rgba(255, 255, 255, 0.08));
-    --evcc-chip-border: var(--evcc-profile-chip-border, rgba(255, 255, 255, 0.14));
+    --evcc-chip-bg:     var(--evcc-profile-chip-bg, color-mix(in srgb, var(--evcc-overlay-ink) 8%, transparent));
+    --evcc-chip-border: var(--evcc-profile-chip-border, color-mix(in srgb, var(--evcc-overlay-ink) 14%, transparent));
     --evcc-chip-text:   var(--evcc-profile-chip-text, var(--evcc-text-primary));
     font-weight: 600;
   }
@@ -549,8 +549,8 @@ export const roomStyles = `
   }
 
   .evcc-room-card.is-enabled .evcc-room-setting-chip {
-    --evcc-chip-bg:     var(--evcc-room-chip-bg, rgba(255, 255, 255, 0.08));
-    --evcc-chip-border: var(--evcc-room-chip-border, rgba(255, 255, 255, 0.14));
+    --evcc-chip-bg:     var(--evcc-room-chip-bg, color-mix(in srgb, var(--evcc-overlay-ink) 8%, transparent));
+    --evcc-chip-border: var(--evcc-room-chip-border, color-mix(in srgb, var(--evcc-overlay-ink) 14%, transparent));
   }
 
   /* =========================================================
@@ -785,7 +785,7 @@ export const roomStyles = `
     height:          18px;
     padding:         0 5px;
     border-radius:   999px;
-    background:      var(--evcc-queue-order-bg, rgba(255, 255, 255, 0.10));
+    background:      var(--evcc-queue-order-bg, color-mix(in srgb, var(--evcc-overlay-ink) 10%, transparent));
     border:          1px solid var(--evcc-queue-order-border, transparent);
     font-size:       0.7rem;
     font-weight:     700;

@@ -14,6 +14,11 @@
 // helper (slice b) so this card and the full panel can't drift.
 
 import { translate, resolveLang, ensureLocalesLoaded, applyDir } from "../i18n/index.js";
+// ISSUE #65 -- this card owns its CSS and shipped with NO --evcc-* defined, so every
+// evcc token reference in it fell through to its white-alpha fallback and the card rendered
+// invisible on a light HA theme. Same gap as the standalone map embed, same repair:
+// define the tokens here rather than re-inking each fallback.
+import { foundationTokens } from "../styles/foundation.js";
 import {
   esc, callResponse, defineCard, registerCard, getStoredLang, setStoredLang,
   renderLangControl, wireLangControl, LANG_CSS, vocab, roomSwitchesFor,
@@ -206,7 +211,7 @@ class VacuumAgentProfileCard extends HTMLElement {
   _render() {
     if (!this.shadowRoot) return;
     applyDir(this, resolveLang(this._hass, this._config, this._langOverride));
-    const style = `<style>${CARD_CSS}</style>`;
+    const style = `<style>${foundationTokens}${CARD_CSS}</style>`;
 
     if (!this._vacuumId() || !this._mapId() || !this._profileId()) {
       this.shadowRoot.innerHTML = `${style}<div class="evcc-pcard"><div class="evcc-pcard-empty">${this.t("profile_card.configure")}</div></div>`;

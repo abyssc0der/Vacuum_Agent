@@ -109,7 +109,7 @@ export const reviewStyles = `
     padding: 14px;
     border-radius: var(--evcc-radius-inner, 8px);
     border: 1px solid var(--evcc-border-subtle);
-    background: color-mix(in srgb, var(--evcc-surface-panel) 88%, white 12%);
+    background: color-mix(in srgb, var(--evcc-surface-panel) 88%, var(--evcc-overlay-ink) 12%);
   }
 
   .evcc-review-matcher-results-header {
@@ -218,7 +218,7 @@ export const reviewStyles = `
     padding: 10px 12px;
     border-radius: var(--evcc-radius-inner, 8px);
     border: 1px solid var(--evcc-border-subtle);
-    background: color-mix(in srgb, var(--evcc-surface-panel) 90%, white 10%);
+    background: color-mix(in srgb, var(--evcc-surface-panel) 90%, var(--evcc-overlay-ink) 10%);
   }
 
   .evcc-review-reason {

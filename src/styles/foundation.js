@@ -137,36 +137,24 @@ export const sharedChipStyles = `
   }
 `;
 
-export const foundationStyles = `
-
-  :host {
-    display: block;
-    position: relative;
-    height: 100%;
-    min-height: 0;
-  }
-
-  /* PANEL MODE. height:100% needs a parent with a definite height, and
-     ha-panel-custom does not give its child one — a panel is expected to size
-     itself. Without this the shell collapses to content height (measured: 209px in
-     a 780px viewport), which unpins the mobile nav and leaves the sticky header
-     with no scroll container. As a dashboard CARD the host does supply a height, so
-     this is scoped to the panel attribute rather than applied globally.
-
-     --evcc-panel-offset is MEASURED (main.js:_syncPanelOffset) — where the host
-     actually starts in the viewport. It replaces a guess: this integration
-     registers through panel_custom with embed_iframe=False, so HA renders it in
-     ha-panel-custom, which gives the panel the whole area and NO toolbar. The
-     old header-height subtraction therefore removed ~56px for chrome that
-     is not on screen, leaving that much dead space below the bottom nav.
-
-     The --header-height chain stays as the fallback for the frame before the
-     first measurement, and for any context where the toolbar IS drawn, so this
-     degrades to the previous behaviour rather than to an overflow. */
-  :host([data-evcc-panel]) {
-    height: calc(100dvh - var(--evcc-panel-offset, var(--header-height, 56px)));
-  }
-
+/**
+ * THE CANONICAL TOKEN BLOCK -- its own export so it can have a SECOND consumer.
+ *
+ * ISSUE #65. These tokens used to live inline in `foundationStyles`, which only the
+ * CARD loads. The standalone `<eufy-vacuum-map>` embed builds its shadow CSS as
+ * `:host{display:block}${mapStyles}${EMBED_CSS}` (cards/vacuum-map-host.js) -- no
+ * foundation, so NO --evcc-* token is defined there at all and every
+ * `var(--evcc-x, <literal>)` in map.js falls through to its literal. Those literals
+ * are white-alphas, so the embed had the same invisible-on-light failure as the card
+ * and would NOT have been fixed by re-inking the card tokens.
+ *
+ * The sweep that found this proposed editing 72 literals in map.js. That is the wrong
+ * repair: the literals are fallbacks, and a fallback firing means the TOKEN IS MISSING.
+ * Define the token in the context that lacks it and all 72 resolve at once -- and keep
+ * resolving when a thirteenth tint is added. Editing the fallbacks would have left the
+ * embed one `var()` away from the same bug forever.
+ */
+export const foundationTokens = `
   /* anchor: CNVJMQTE */
   :host {
 
@@ -178,15 +166,38 @@ export const foundationStyles = `
     /* anchor: CNRE7F7B */
     --evcc-surface-base:   var(--card-background-color, #1c2127);
     --evcc-surface-card:   var(--evcc-surface-base);
-    --evcc-surface-panel:  color-mix(in srgb, var(--evcc-surface-base) 85%, white 15%);
-    --evcc-surface-raised: color-mix(in srgb, var(--evcc-surface-base) 92%, white 8%);
-    --evcc-surface-input:  rgba(255,255,255,0.06);
+
+    /* anchor: RNLGHT4K  the OVERLAY INK -- the one question every tinted surface
+       and border asks: "what colour do I tint the base WITH?"
+       ISSUE #65. Every token below was a literal white-alpha, which is correct
+       only while --evcc-surface-base is dark. But surface-base FOLLOWS HA
+       (--card-background-color), so on a light HA theme the base went white and
+       white-at-4-18%-over-white is WHITE: every border, control background,
+       chip and raised panel rendered invisible. Text did not break in the same
+       way because it already followed HA (--primary-text-color), which is why
+       the card looked half-themed rather than obviously broken -- the reporter
+       spent weeks assuming features were MISSING rather than unreadable.
+       (#62: "I can't say whether this was due to it not being there or my not
+       having found the UI element".)
+       --primary-text-color is HA's own contrast-of-the-background, so deriving
+       the ink from it inverts with the theme at no cost: near-white on a dark
+       theme (what shipped), near-black on a light one. No mode detection, no
+       media query, no second palette to keep in sync -- one definition that is
+       already correct in both directions. A theme that overrides the ink moves
+       every tint with it, which is the behaviour a theme author expects. */
+    --evcc-overlay-ink:    var(--primary-text-color, #f0f2f5);
+
+    --evcc-surface-panel:  color-mix(in srgb, var(--evcc-surface-base) 85%, var(--evcc-overlay-ink) 15%);
+    --evcc-surface-raised: color-mix(in srgb, var(--evcc-surface-base) 92%, var(--evcc-overlay-ink) 8%);
+    --evcc-surface-input:  color-mix(in srgb, var(--evcc-overlay-ink) 6%, transparent);
     --evcc-surface-overlay: rgba(0,0,0,0.4);
-    --evcc-surface-subtle: rgba(255,255,255,0.04);
-    --evcc-surface-hover:  rgba(255,255,255,0.08);
-    --evcc-surface-chip:   rgba(255,255,255,0.09);
-    --evcc-surface-action: rgba(255,255,255,0.10);
-    --evcc-surface-action-hover: rgba(255,255,255,0.18);
+    --evcc-surface-subtle: color-mix(in srgb, var(--evcc-overlay-ink) 4%, transparent);
+    --evcc-surface-hover:  color-mix(in srgb, var(--evcc-overlay-ink) 8%, transparent);
+    --evcc-surface-chip:   color-mix(in srgb, var(--evcc-overlay-ink) 9%, transparent);
+    --evcc-surface-action: color-mix(in srgb, var(--evcc-overlay-ink) 10%, transparent);
+    --evcc-surface-action-hover: color-mix(in srgb, var(--evcc-overlay-ink) 18%, transparent);
+    /* BLACK-ink on purpose, both of them: a scrim and a sunken well read as
+       "recessed" in either theme, so these were never part of the #65 class. */
     --evcc-surface-sunken: rgba(0,0,0,0.18);
     --evcc-surface-warning: rgba(255,180,0,0.12);
     /* The success half of the same pair, added when the sequence-override row
@@ -202,14 +213,14 @@ export const foundationStyles = `
     /* Text */
     --evcc-text-primary:   var(--primary-text-color, #f0f2f5);
     --evcc-text-secondary: var(--secondary-text-color, rgba(240,242,245,0.72));
-    --evcc-text-muted:     rgba(240,242,245,0.48);
+    --evcc-text-muted:     color-mix(in srgb, var(--evcc-text-primary) 58%, var(--evcc-surface-base));
     --evcc-text-strong:    var(--primary-text-color, #f0f2f5);
     --evcc-text-on-accent: #ffffff;
 
     /* Borders */
-    --evcc-border-subtle:  rgba(255,255,255,0.06);
-    --evcc-border-default: rgba(255,255,255,0.10);
-    --evcc-border-strong:  rgba(255,255,255,0.18);
+    --evcc-border-subtle:  color-mix(in srgb, var(--evcc-overlay-ink) 6%, transparent);
+    --evcc-border-default: color-mix(in srgb, var(--evcc-overlay-ink) 10%, transparent);
+    --evcc-border-strong:  color-mix(in srgb, var(--evcc-overlay-ink) 18%, transparent);
     --evcc-border-warning: rgba(255,180,0,0.35);
     --evcc-border-success: rgba(76,175,110,0.35);
 
@@ -285,6 +296,58 @@ export const foundationStyles = `
     /* Motion */
     --evcc-transition-normal: 150ms ease;
   }
+
+  /* anchor: RNLGHT4K (cont.)  THE ACCENT IS NOT A TINT, so it is not fixed by the ink.
+     --evcc-accent is HA's own --accent-color. Measured on a real render: #03a9f4 scores
+     6.48:1 on the dark base and 2.63:1 on the light one -- readable on dark, below even
+     the large-text floor on light, on the active tab pill, "Create Profile", "Run" and
+     the strict-order chip.
+     Mixing it toward the ink UNCONDITIONALLY would fix light by also changing dark, where
+     the ink is near-white: measured 35% takes dark from #03a9f4 to a washed #51bded, a
+     visible change to every install that is working fine today. So the mix is applied
+     ONLY on the light scheme, keyed off the attribute syncColourScheme() stamps from the
+     colour actually rendered (styles/index.js) rather than prefers-color-scheme, which
+     reports the OS and not the Home Assistant theme.
+     35% because it is the first step that clears WCAG AA: 2.63 -> 4.82:1. The source is
+     --accent-color, NOT --evcc-accent, which would be self-referential.
+     A theme that sets --evcc-accent explicitly still wins: that lands as an inline
+     property on the host and inline beats a :host() rule. */
+  :host([data-evcc-scheme="light"]) {
+    --evcc-accent: color-mix(in srgb, var(--accent-color, #3b82f6) 65%, var(--evcc-overlay-ink) 35%);
+  }
+`;
+
+export const foundationStyles = `
+
+  :host {
+    display: block;
+    position: relative;
+    height: 100%;
+    min-height: 0;
+  }
+
+  /* PANEL MODE. height:100% needs a parent with a definite height, and
+     ha-panel-custom does not give its child one — a panel is expected to size
+     itself. Without this the shell collapses to content height (measured: 209px in
+     a 780px viewport), which unpins the mobile nav and leaves the sticky header
+     with no scroll container. As a dashboard CARD the host does supply a height, so
+     this is scoped to the panel attribute rather than applied globally.
+
+     --evcc-panel-offset is MEASURED (main.js:_syncPanelOffset) — where the host
+     actually starts in the viewport. It replaces a guess: this integration
+     registers through panel_custom with embed_iframe=False, so HA renders it in
+     ha-panel-custom, which gives the panel the whole area and NO toolbar. The
+     old header-height subtraction therefore removed ~56px for chrome that
+     is not on screen, leaving that much dead space below the bottom nav.
+
+     The --header-height chain stays as the fallback for the frame before the
+     first measurement, and for any context where the toolbar IS drawn, so this
+     degrades to the previous behaviour rather than to an overflow. */
+  :host([data-evcc-panel]) {
+    height: calc(100dvh - var(--evcc-panel-offset, var(--header-height, 56px)));
+  }
+
+${foundationTokens}
 
   /* =========================================================
      RESET

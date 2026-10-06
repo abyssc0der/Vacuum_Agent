@@ -153,6 +153,70 @@ export function animalHslComponents(hex) {
  * @param {HTMLElement} card          - The target element (card host or modal host).
  * @param {{ tokens: object }} resolvedTheme - Resolved theme object from state.resolvedTheme().
  */
+/**
+ * Stamp `data-evcc-scheme="light"|"dark"` on a themed host from the RESOLVED base colour.
+ *
+ * ISSUE #65. Two different light signals shipped and they disagree:
+ *   - the card had NONE, so every tint assumed a dark base;
+ *   - modal-host/modals/room-rules branch on `@media (prefers-color-scheme: light)`,
+ *     which is the OPERATING SYSTEM's preference, not Home Assistant's theme.
+ * A user on an HA light theme with a dark OS gets dark-branch modals over a light card,
+ * and the reporter's "follow HA theme" never triggers that branch at all. The OS cannot
+ * know which HA theme is active, so it was never the right signal.
+ *
+ * The honest signal is the colour we actually render on. `--evcc-surface-base` already
+ * resolves it (`var(--card-background-color, #1c2127)`), so measure THAT and let CSS key
+ * off the answer.
+ *
+ * WHY A PROBE ELEMENT AND NOT A PARSER. Reading the custom property gives the DECLARED
+ * string -- `#fff`, `rgb()`, `color(srgb …)`, or a var() chain -- and hand-parsing it is
+ * how this work already produced two wrong answers: a `color(srgb 0.87 …)` read as 0-255
+ * made every fixed panel measure as near-black, and a `#1c1c1c` with no parseable decimals
+ * inflated the dark contrast figures. Painting the colour on a throwaway node and reading
+ * `backgroundColor` back hands the parsing to the browser, which cannot get it wrong. The
+ * 0-1 branch below is kept anyway, because `color()` serialisation is exactly the case
+ * that already bit twice and a comment is not a guard.
+ */
+function syncColourScheme(host) {
+  try {
+    if (!host || typeof document === "undefined") return;
+    const probe = document.createElement("span");
+    probe.setAttribute("aria-hidden", "true");
+    /* rtl-ignore — this is an off-screen parking spot for a 0x0 measurement node,
+       not layout. There is no inline-start equivalent that is off-screen in BOTH
+       directions, and a logical property here would park the probe ON SCREEN in RTL. */
+    probe.style.cssText =
+      "position:fixed;left:-9999px;top:0;width:0;height:0;pointer-events:none;" + /* rtl-ignore */
+      "background-color:var(--evcc-surface-base, var(--card-background-color, #1c2127))";
+    const mount = host.shadowRoot ?? host;
+    mount.appendChild(probe);
+    const raw = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    const n = String(raw).match(/[\d.]+/g);
+    if (!n || n.length < 3) return;
+    const scale = String(raw).startsWith("color(") ? 255 : 1;
+    const [r, g, b] = n.slice(0, 3).map((v) => Number(v) * scale);
+    if (![r, g, b].every(Number.isFinite)) return;
+    const lin = (v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    };
+    const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    // Mid-grey splits it. A base at exactly 0.5 is a coin toss either way, and
+    // `!(L > 0.5)` rather than `L <= 0.5` so a NaN that slipped the guard lands on
+    // "dark" -- the value that ships today -- instead of flipping every install.
+    // applyThemeToCard runs at the top of EVERY _render (main.js), which is what keeps
+    // this tracking a live HA theme switch -- but it also means this runs constantly.
+    // Writing the attribute unconditionally would invalidate style for the whole shadow
+    // subtree on every render for a value that almost never changes, so only write on a
+    // real transition.
+    const next = !(L > 0.5) ? "dark" : "light";
+    if (host.getAttribute("data-evcc-scheme") !== next) {
+      host.setAttribute("data-evcc-scheme", next);
+    }
+  } catch (_) { /* a themed host that cannot be measured keeps whatever it has */ }
+}
+
 export function applyDynamicTheme(card, resolvedTheme) {
   if (!card || !resolvedTheme) return;
 
@@ -176,6 +240,10 @@ export function applyDynamicTheme(card, resolvedTheme) {
       host.style.setProperty(property, asComponents ?? value);
     }
   });
+
+  // Re-measure AFTER the token layer lands: a theme may set --evcc-surface-base
+  // itself, so the scheme has to be read from the post-apply state, not the pre.
+  syncColourScheme(host);
 }
 
 /* The two document.body portal-host stylesheets are NOT members of the STYLES cascade

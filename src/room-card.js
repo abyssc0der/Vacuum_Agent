@@ -1,6 +1,11 @@
 // Standalone per-room Lovelace card with settings chips, save, and quick-start for managed vacuums.
 
 import { translate, resolveLang, ensureLocalesLoaded, applyDir } from "./i18n/index.js";
+// ISSUE #65 -- this card owns its CSS and shipped with NO --evcc-* defined, so every
+// evcc token reference in it fell through to its white-alpha fallback and the card rendered
+// invisible on a light HA theme. Same gap as the standalone map embed, same repair:
+// define the tokens here rather than re-inking each fallback.
+import { foundationTokens } from "./styles/foundation.js";
 import {
   esc, vocab, roomSwitchesFor, adapterOptions, adapterRange, sliderRow, SLIDER_ROW_CSS, committedRoomFields, isMopMode, canonicalCleanMode, stripNull, defineCard,
   renderLangControl, wireLangControl, LANG_CSS, getStoredLang, setStoredLang,
@@ -376,7 +381,7 @@ class EufyRoomCard extends HTMLElement {
 
     applyDir(this, resolveLang(this._hass, this._config, this._langOverride));
     this.shadowRoot.innerHTML = `
-      <style>
+      <style>${foundationTokens}
         :host {
           display: block;
           --accent:       var(--evcc-accent, #3b82f6);

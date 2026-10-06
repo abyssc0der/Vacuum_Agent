@@ -312,6 +312,59 @@ for (const tok of KNOWN_DANGLING) {
   }
 }
 
+/* =========================================================
+   TINT TOKENS MUST NOT ASSUME A DARK BASE  (issue #65)
+   =========================================================
+   `foundation.js` is exempt from the un-tokenized-colour lint above
+   (TOKEN_DEF_FILES) because literals there ARE the token defaults. That
+   exemption is correct and is also why #65 shipped: every surface/border tint
+   was a literal WHITE alpha, which is only right while the base is dark --
+   and `--evcc-surface-base` FOLLOWS HA (`--card-background-color`). On a light
+   HA theme the base went white, white-over-white is white, and every border,
+   control background, chip and raised panel rendered invisible. Text survived
+   because it already followed HA, so the card looked half-themed rather than
+   broken and the reporter assumed features were MISSING rather than unreadable.
+
+   The invariant, stated so it can go red: a token that TINTS the base may not
+   hardcode the ink. It must reference a var (today `--evcc-overlay-ink`, which
+   derives from `--primary-text-color` and so inverts with the theme).
+
+   BLACK literals are allowed on purpose: a scrim and a sunken well read as
+   "recessed" on either base, so they were never part of this class. Only a
+   LIGHT ink encodes the dark-base assumption.
+
+   ABLATION (do this if you touch the check): set --evcc-border-default back to
+   rgba(255,255,255,0.10) in foundation.js and this must FAIL. Measured on the
+   #65 fix -- 12 tokens, 12 failures. 1123 JS tests and every other check in
+   this file stayed GREEN against the broken values. */
+const TINT_TOKEN = /(--evcc-(?:surface|border)-[a-z-]+|--evcc-text-muted)\s*:\s*([^;]+);/g;
+const LIGHT_INK = /rgba?\(\s*255\s*,\s*255\s*,\s*255|rgba?\(\s*240\s*,\s*242\s*,\s*245|\bwhite\s+\d/;
+/* Tints that are legitimately a fixed colour rather than a tint OF the base:
+   a scrim, a sunken well, and the two semantic wash surfaces which carry their
+   own hue and read correctly on either base. */
+const FIXED_INK_OK = new Set([
+  "--evcc-surface-overlay", "--evcc-surface-sunken",
+  "--evcc-surface-warning", "--evcc-surface-success",
+  "--evcc-border-warning",  "--evcc-border-success",
+]);
+{
+  const foundation = readFileSync(join(DIR, "foundation.js"), "utf8");
+  let m;
+  while ((m = TINT_TOKEN.exec(foundation))) {
+    const [, token, value] = m;
+    if (FIXED_INK_OK.has(token)) continue;
+    if (LIGHT_INK.test(value)) {
+      fail(
+        `${token} hardcodes a LIGHT ink (${value.trim().slice(0, 48)}) — it tints ` +
+        `--evcc-surface-base, which follows HA's --card-background-color, so this ` +
+        `renders invisible on a light HA theme (issue #65). Tint with ` +
+        `var(--evcc-overlay-ink) instead, or add it to FIXED_INK_OK if it is ` +
+        `genuinely a fixed colour on both bases.`
+      );
+    }
+  }
+}
+
 // anchor: CNN7APJJ
 if (failures) { console.error(`FAIL — ${failures} style problem(s).`); process.exit(1); }
 // anchor: CNCVC9M3
