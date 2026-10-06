@@ -994,7 +994,11 @@ class EufyVacuumManager:
                 # created here has no rejections at all, so both start empty.
                 "rejected_rooms": [],
                 "rejected_rooms_by_map": {},
+                # Flat history is the LEGACY bucket, read but never appended to;
+                # per-map is where every pass writes (DR-MAPHIST). A record minted
+                # here has no history at all, so both start empty.
                 "room_drift_history": {},
+                "room_drift_history_by_map": {},
             }
 
             for bucket in vac_maps.values():

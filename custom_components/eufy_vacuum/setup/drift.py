@@ -213,6 +213,7 @@ def _get_progress_record(
             "rejected_rooms": [],
             "rejected_rooms_by_map": {},
             "room_drift_history": {},
+            "room_drift_history_by_map": {},
         }
 
     record = root.setdefault(
@@ -226,6 +227,7 @@ def _get_progress_record(
     )
     # Defence in depth — older records may be missing the history field.
     record.setdefault("room_drift_history", {})
+    record.setdefault("room_drift_history_by_map", {})
     record.setdefault("rejected_rooms", [])
     record.setdefault("rejected_rooms_by_map", {})
     record.setdefault("completed_steps", [])
@@ -497,6 +499,76 @@ def _list_configured_room_ids(
     return out
 
 
+def _drift_history(
+    manager: Any,
+    record: dict[str, Any],
+    vacuum_entity_id: str,
+    map_id: str | None,
+) -> dict[str, Any]:
+    """The drift-history bucket FOR ONE MAP — the live mutable dict.
+
+    DR-MAPHIST. ``room_drift_history`` was one flat dict keyed by room id, with no
+    map dimension, while every decision it feeds is per-map. It therefore could not
+    answer the only question asked of it, and failed in OPPOSITE directions by brand:
+
+    * Roborock issues a distinct segment id per map, so another floor's rooms are
+      absent from this map's configured set and surfaced as NEW ROOMS THAT DO NOT
+      EXIST HERE. Reported on a two-floor install (#62): "New rooms discovered
+      [room], when [room] is a room on the non-active map."
+    * Eufy reissues ids 1..N per map, so a genuinely new id 3 upstairs is masked by
+      the configured id 3 downstairs and never surfaces at all.
+
+    Scoping ``configured_ids`` in 2.2.3 moved the damage from the second to the
+    first; neither is fixable while the history itself cannot say which map an
+    entry belongs to. So it says.
+
+    LEGACY ``room_drift_history`` IS READ BUT NEVER APPENDED TO, mirroring
+    ``rejected_rooms`` (A4-SETUP-6) — with one deliberate difference in what we are
+    willing to do with it. A rejection is a USER DECISION and must survive, so the
+    legacy list is applied to every map forever. A drift counter is DERIVED STATE
+    that rebuilds itself within ``n_remove``/``n_new`` passes, so an unattributable
+    one is not worth a guess: it is adopted ONLY where the attribution is certain.
+
+    Attribution mirrors ``_resolve_rejection_map`` exactly, for the same reason:
+
+    * 0 maps -> nothing to attribute to; the legacy dict is returned as-is.
+    * 1 map  -> unambiguous. The legacy entries ARE that map's, so they migrate
+      into it once and the flat dict is left empty.
+    * 2+ maps -> the entry genuinely carries no map and inventing one would be a
+      guess in the destructive direction (a wrong ``missing_passes`` removes a real
+      room). Legacy is NOT adopted; per-map history rebuilds from the next pass.
+
+    ``map_id=None`` on a multi-map vacuum is unattributable by the same argument and
+    yields an EMPTY bucket — never a union. A union is what produced the #62 report.
+    """
+    by_map = record.setdefault("room_drift_history_by_map", {})
+    legacy = record.setdefault("room_drift_history", {})
+
+    try:
+        known = _known_map_ids(manager, vacuum_entity_id)
+    except Exception:  # pragma: no cover - a map lookup must never break drift
+        known = []
+
+    if len(known) <= 1:
+        # 0 maps: nothing has a map, so the flat dict IS the whole truth.
+        # 1 map: the legacy entries can only have come from it -- adopt once.
+        target = str(map_id) if map_id is not None else (known[0] if known else None)
+        if target is None:
+            return legacy
+        bucket = by_map.setdefault(target, {})
+        if legacy:
+            for key, entry in legacy.items():
+                bucket.setdefault(key, entry)
+            legacy.clear()
+        return bucket
+
+    if map_id is None:
+        # Unattributable on a multi-map vacuum. An empty bucket makes the caller
+        # claim nothing, which is the only honest answer and the safe one.
+        return {}
+    return by_map.setdefault(str(map_id), {})
+
+
 def _room_lookup(
     manager: Any, vacuum_entity_id: str
 ) -> dict[int, dict[str, Any]]:
@@ -600,7 +672,9 @@ def update_drift_history(
         return
 
     record = _get_progress_record(manager, vacuum_entity_id)
-    history: dict[str, dict[str, Any]] = record["room_drift_history"]
+    history: dict[str, dict[str, Any]] = _drift_history(
+        manager, record, vacuum_entity_id, map_id
+    )
     now = _iso_now()
 
     # TWO DIFFERENT QUESTIONS, and scoping both to this map was a regression caught in
@@ -700,7 +774,9 @@ def compute_room_drift(
     """
     record = _get_progress_record(manager, vacuum_entity_id)
     cadence = get_discovery_cadence(vacuum_entity_id)
-    history: dict[str, dict[str, Any]] = record["room_drift_history"]
+    history: dict[str, dict[str, Any]] = _drift_history(
+        manager, record, vacuum_entity_id, map_id
+    )
     rejected_ids = rejected_room_ids(record, map_id=map_id)
     configured_ids = _list_configured_room_ids(manager, vacuum_entity_id, map_id=map_id)
     lookup = _room_lookup(manager, vacuum_entity_id)
@@ -875,7 +951,7 @@ def reject_rooms(
             affected_map_ids.append(str(candidate_map_id))
 
     # Drop any stale history entries for the rejected rooms.
-    history = record["room_drift_history"]
+    history = _drift_history(manager, record, vacuum_entity_id, map_id)
     for rid_int in added:
         history.pop(str(rid_int), None)
 
@@ -1061,7 +1137,20 @@ def force_remove_room(
     record = _get_progress_record(manager, vacuum_entity_id)
     cadence = get_discovery_cadence(vacuum_entity_id)
     n_remove = cadence["removal_confirmation_passes"]
-    history = record["room_drift_history"]
+    # DR-MAPHIST. The counter this writes is per-map, but the service carries no
+    # map (adding one is a 3-layer plumb: caller, action wrapper, services.yaml).
+    # The user presses "this room is gone" while LOOKING at a map, so resolve the
+    # active one exactly as setup/status.py does for the drift read; _drift_history
+    # handles the 0/1-map cases and refuses to guess on 2+ with nothing resolved.
+    _map_id = None
+    _resolver = getattr(manager, "resolve_active_map_id", None)
+    if callable(_resolver):
+        try:
+            _resolved = _resolver(vacuum_entity_id)
+            _map_id = str(_resolved) if _resolved else None
+        except Exception:  # pragma: no cover - resolution must not break removal
+            _map_id = None
+    history = _drift_history(manager, record, vacuum_entity_id, _map_id)
     key = str(int(room_id))
     entry = history.setdefault(
         key,

@@ -47,6 +47,24 @@ from custom_components.eufy_vacuum.setup.drift import (
 )
 
 from tests._factories import VAC as _VAC, MAP as _MAP, set_room_field
+
+
+def _deep_history(manager, map_id=None):
+    """The drift-history bucket, merged across maps (DR-MAPHIST).
+
+    History is stored per map now. These assertions are single-map, so the merge is
+    the whole of it; writing it as a merge rather than a fixed key means a second map
+    added to a fixture later cannot make an assertion pass by reading an empty dict.
+    """
+    rec = manager.data["setup_progress"][_VAC]
+    by_map = rec.get("room_drift_history_by_map") or {}
+    if map_id is not None:
+        return by_map.get(str(map_id), {})
+    out = {}
+    for bucket in by_map.values():
+        out.update(bucket)
+    return out
+
 from .conftest import setup_map
 
 
@@ -153,12 +171,12 @@ def test_reject_rooms_clears_drift_history_entry(manager):
 
     # Seed a drift history entry for room 1.
     update_drift_history(manager, _VAC, discovered_room_ids={1, 2})
-    history = manager.data["setup_progress"][_VAC]["room_drift_history"]
+    history = _deep_history(manager)
     assert "1" in history
 
     reject_rooms(manager, _VAC, [1])
 
-    history = manager.data["setup_progress"][_VAC]["room_drift_history"]
+    history = _deep_history(manager)
     assert "1" not in history
 
 

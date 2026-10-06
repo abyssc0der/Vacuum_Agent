@@ -120,7 +120,49 @@ resurrect the bug.
 
 ---
 
-## 5. Destructive operations are gated by the backend
+## 5. Drift history belongs to one map too — and for the opposite reason
+
+`room_drift_history` was one flat dict keyed by room id, with no map dimension, while every
+decision it feeds is per map. It therefore could not answer the only question asked of it, and
+it failed in **opposite directions depending on the brand**:
+
+- **Roborock** issues a distinct segment id per map. Another floor's rooms are absent from this
+  map's configured set, so they surfaced as *new rooms that do not exist here* — offered for
+  rejection. Reported on a live two-floor install: *"New rooms discovered [room], when [room] is
+  a room on the non-active map. I'm offered 'reject as phantom'."*
+- **Eufy** reissues ids 1..N per map. A genuinely new id 3 upstairs is masked by the configured
+  id 3 downstairs and never surfaces at all.
+
+Scoping `configured_ids` to the active map moved the damage from the second symptom to the
+first. Neither is fixable while the history cannot say which map an entry came from, so now it
+says: `setup/drift.py::_drift_history` is the single accessor and every read and write goes
+through it.
+
+### Legacy history is adopted only where attribution is certain
+
+This mirrors the rejection split in §4 with **one deliberate difference**, and the difference is
+the point:
+
+> A rejection is a **user decision** and must survive, so the legacy flat list applies to every
+> map forever. A drift counter is **derived state** that rebuilds itself within
+> `removal_confirmation_passes` / `new_room_confirmation_passes`, so an unattributable one is
+> not worth a guess.
+
+Attribution follows `_resolve_rejection_map` exactly: **0 maps** → nothing to attribute to;
+**1 map** → unambiguous, so the legacy entries migrate into it once and the flat dict is left
+empty; **2+ maps** → the entry carries no map and inventing one would guess in the *destructive*
+direction, because a wrong `missing_passes` removes a real room. Legacy is not adopted there;
+per-map history rebuilds from the next pass.
+
+Calling the accessor with no map on a multi-map vacuum yields an **empty** bucket, never a
+union. The union is what produced the report above.
+
+Covered by `[DR-MAPHIST-1]` (the other map's rooms are not offered as new) and `[DR-MAPHIST-2]`
+(a genuinely new room on its own map still is — so "fix the false positive" and "delete the
+feature" cannot be confused). Ablating `_drift_history` back to the flat dict turns
+`[DR-MAPHIST-1]` red with `new_rooms == [7, 8]`.
+
+## 6. Destructive operations are gated by the backend
 
 `setup/protection.py::evaluate_map_protection` assigns one of three levels, and **the backend is
 the single source of truth** — the panel only displays what it is told:
@@ -144,7 +186,7 @@ levels a proportionate answer rather than an insufficient one.
 
 ---
 
-## 6. Common wrong assumptions
+## 7. Common wrong assumptions
 
 | assumption | reality |
 |---|---|

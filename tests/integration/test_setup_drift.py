@@ -45,6 +45,32 @@ _VAC = "vacuum.alfred"
 _MAP = "1"
 
 
+def _history(manager, map_id=_MAP):
+    """One map's drift-history bucket (DR-MAPHIST).
+
+    History is stored per map now, because every decision it feeds is per map and a
+    flat dict could not say which floor an entry came from. These tests assert on the
+    STORAGE, so they name the map; a test that only cares about observable behaviour
+    should go through compute_room_drift instead.
+    """
+    rec = manager.data["setup_progress"][_VAC]
+    return rec["room_drift_history_by_map"].get(str(map_id), {})
+
+
+def _history_any_map(manager):
+    """Every map's entries merged — for "nothing was struck ANYWHERE" assertions.
+
+    Load-bearing for the DR-SCOPE tests: reading ONE map's bucket there would pass
+    vacuously, because the strike being guarded against lands in whichever bucket the
+    offending pass was scoped to.
+    """
+    out = {}
+    for bucket in manager.data["setup_progress"][_VAC]["room_drift_history_by_map"].values():
+        out.update(bucket)
+    return out
+
+
+
 @pytest.fixture(autouse=True)
 def _vacuum_is_added(manager):
     """Setup progress only exists for a vacuum that has been ADDED.
@@ -218,7 +244,7 @@ def test_update_drift_history_increments_missing_passes(manager):
     # "unreadable pass" and scores nothing — the assertion would then have been
     # measuring the guard, not the increment it claims to cover.
     update_drift_history(manager, _VAC, discovered_room_ids={2})
-    history = manager.data["setup_progress"][_VAC]["room_drift_history"]
+    history = _history(manager)
     assert history["1"]["missing_passes"] == 1
 
 
@@ -231,7 +257,7 @@ def test_update_drift_history_resets_on_reappearance(manager):
     # Miss once — a readable pass that lists room 2 but not room 1 (C58: an
     # empty set is a read failure, not a sighting of nothing).
     update_drift_history(manager, _VAC, discovered_room_ids={2})
-    history = manager.data["setup_progress"][_VAC]["room_drift_history"]
+    history = _history(manager)
     assert history["1"]["missing_passes"] == 1
 
     # Reappear
@@ -301,7 +327,7 @@ def test_unconfigured_room_excluded_from_drift_tracking(manager):
     # never had. C58: `set()` would be an unreadable pass and would score
     # nothing, so it can no longer express "both rooms missing".
     update_drift_history(manager, _VAC, discovered_room_ids={99})
-    history = manager.data["setup_progress"][_VAC]["room_drift_history"]
+    history = _history(manager)
 
     assert history.get("1", {}).get("missing_passes") == 1
     assert "2" not in history
@@ -335,7 +361,7 @@ def test_empty_discovery_pass_leaves_drift_history_untouched(manager, caplog):
     # Two REAL misses: readable passes that list room 2 and not room 1.
     update_drift_history(manager, _VAC, discovered_room_ids={2})
     update_drift_history(manager, _VAC, discovered_room_ids={2})
-    history = manager.data["setup_progress"][_VAC]["room_drift_history"]
+    history = _history(manager)
     assert history["1"]["missing_passes"] == 2
 
     before = copy.deepcopy(history)
@@ -421,6 +447,57 @@ def test_dr_scope_0_the_fixture_can_tell_the_maps_apart(manager):
     assert ids["A"].isdisjoint(ids["B"]), "the maps must differ or nothing is proved"
 
 
+def test_dr_maphist_1_the_other_maps_rooms_are_not_reported_as_new(manager):
+    """[DR-MAPHIST-1] THE RED INPUT, reported from a live two-floor Roborock (#62).
+
+    "There is an occasional 'New rooms discovered [my room]', when [my room] is a
+    room on the non-active map. I'm offered 'reject as phantom'."
+
+    The setup page calls compute_room_drift with NO discovered_room_ids, so "new" is
+    derived from stored history alone. History used to be one flat dict keyed by room
+    id with no map dimension, while configured_ids is scoped to the active map — so
+    every room on the OTHER floor was "in history, not configured here" and surfaced
+    as new. Roborock issues a distinct segment id per map, which is what exposes it;
+    Eufy reissues 1..N per map, where the same ids mask it and the symmetric defect
+    (a real new room upstairs never offered) appears instead.
+
+    ABLATION: point _drift_history at record["room_drift_history"] for every map and
+    this goes red with new_rooms == [7, 8] -- map B's real, configured rooms offered
+    for rejection while the user is looking at map A.
+    """
+    _two_maps_distinct_ids(manager)
+
+    # The user cleans upstairs: a readable pass against map B banks seen_passes for
+    # B's rooms. Nothing here concerns map A.
+    update_drift_history(manager, _VAC, discovered_room_ids={7, 8}, map_id="B")
+
+    # They switch to map A and open the setup page — the passive read, no live probe.
+    drift = compute_room_drift(manager, _VAC, map_id="A")
+
+    offered = sorted(r["room_id"] for r in drift["new_rooms"])
+    assert offered == [], (
+        f"map B's rooms were offered as new while viewing map A: {offered}"
+    )
+
+
+def test_dr_maphist_2_a_genuinely_new_room_is_still_offered_on_its_own_map(manager):
+    """[DR-MAPHIST-2] The other direction, so DR-MAPHIST-1 cannot be satisfied by
+    simply never reporting anything new.
+
+    A room discovered on map B that is NOT configured must still surface as new when
+    the user is looking at map B. Without this, "fix the false positive" and "delete
+    the feature" are indistinguishable.
+    """
+    _two_maps_distinct_ids(manager)
+
+    # Room 9 shows up on map B and is not configured anywhere.
+    update_drift_history(manager, _VAC, discovered_room_ids={7, 8, 9}, map_id="B")
+
+    drift = compute_room_drift(manager, _VAC, map_id="B")
+    offered = sorted(r["room_id"] for r in drift["new_rooms"])
+    assert offered == [9], f"the genuinely new room on map B was not offered: {offered}"
+
+
 def test_dr_scope_1_a_pass_against_one_map_does_not_strike_the_other(manager):
     """[DR-SCOPE-1] THE RED INPUT. A readable pass against map B sees B's rooms and
     none of A's — because A is a different floor, not a floor that lost its rooms.
@@ -429,7 +506,7 @@ def test_dr_scope_1_a_pass_against_one_map_does_not_strike_the_other(manager):
 
     update_drift_history(manager, _VAC, discovered_room_ids={7, 8}, map_id="B")
 
-    history = manager.data["setup_progress"][_VAC]["room_drift_history"]
+    history = _history_any_map(manager)
     struck = {rid for rid, h in history.items() if h.get("missing_passes", 0) > 0}
     assert not struck, f"a pass against map B struck map A's rooms: {sorted(struck)}"
 
@@ -478,13 +555,13 @@ def test_dr_scope_4_a_pass_against_one_map_does_not_erase_the_others_history(man
     # and died on a KeyError — identically with and without the fix, which made its
     # ablation worthless).
     update_drift_history(manager, _VAC, discovered_room_ids={2}, map_id="A")
-    history = manager.data["setup_progress"][_VAC]["room_drift_history"]
+    history = _history(manager, "A")
     assert history["1"]["missing_passes"] == 1, "setup: map A's room 1 must be struck"
 
     # Now the user switches floors. A pass against B must not touch A's bookkeeping.
     update_drift_history(manager, _VAC, discovered_room_ids={7, 8}, map_id="B")
 
-    history = manager.data["setup_progress"][_VAC]["room_drift_history"]
+    history = _history(manager, "A")
     assert "1" in history, "map A's drift history was erased by a pass against map B"
     assert history["1"]["missing_passes"] == 1, (
         "map A's strike count must survive a pass against another map"
