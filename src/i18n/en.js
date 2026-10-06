@@ -143,6 +143,12 @@ export const en = {
   "vocab.clean_intensity.deep": "Deep",           // cleaning path / intensity
   "vocab.clean_intensity.normal": "Normal",       // cleaning path / intensity (manual-only)
   "vocab.clean_intensity.standard": "Standard",   // cleaning path / intensity (Eufy app term; the dominant stored value)
+  // path_type is the SAME user-facing axis as clean_intensity under Roborock's own
+  // name (the mop route). It had no keys at all until issue #66, because the picker
+  // never rendered: the axis was declared with wide/narrow, which no Roborock has.
+  "vocab.path_type.standard": "Standard",         // mop route: normal pass density
+  "vocab.path_type.deep": "Deep",                 // mop route: tighter passes, slower
+  "vocab.path_type.deep_plus": "Deep+",           // mop route: tightest passes, slowest
 
   // --- base_station (Base Station / dock: status, water, activity, controls) ---
   "base_station.action_available": "Action available",

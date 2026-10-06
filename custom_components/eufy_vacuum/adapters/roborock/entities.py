@@ -21,6 +21,7 @@ SUFFIX_TASK_STATUS = "_status"                   # sensor — enum lifecycle str
 SUFFIX_ACTIVE_CLEANING_TARGET = "_current_room"  # sensor — native live-room (segment cleans only)
 SUFFIX_ACTIVE_MAP = "_selected_map"              # select — multi-map pointer / map identity
 SUFFIX_MOP_INTENSITY = "_mop_intensity"          # select — GLOBAL water level (off/low/medium/high)
+SUFFIX_MOP_MODE      = "_mop_mode"               # select — GLOBAL mop route (standard/deep/deep_plus)
 SUFFIX_CLEANING_TIME = "_cleaning_time"          # sensor — per-run minutes
 SUFFIX_CLEANING_AREA = "_cleaning_area"          # sensor — per-run m2
 # Clean-summary pair, OBSERVABILITY ONLY (issue #46) — never gates completion.

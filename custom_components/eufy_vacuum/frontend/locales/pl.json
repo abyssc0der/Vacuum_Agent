@@ -750,6 +750,11 @@
       "fan_speed": {
         "turbo": "Maks."
       }
+    },
+    "path_type": {
+      "standard": "Standardowe",
+      "deep": "Dokładne",
+      "deep_plus": "Dokładne+"
     }
   },
   "map": {

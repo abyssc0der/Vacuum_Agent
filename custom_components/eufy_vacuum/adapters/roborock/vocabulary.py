@@ -100,9 +100,31 @@ FAN_SPEED_OPTIONS: list[dict] = [
 # name only. Whether a given unit OFFERS it is model_catalog.has_path_control; this list
 # is what a stored value is judged against, which is what lets the store repair reset a
 # value no brand declares (the literal "None" that core's old room backfill wrote).
+# ⚠ THESE WERE "wide"/"narrow" AND NO ROBOROCK HAS EVER HAD SUCH A CONTROL (issue #66).
+# The axis is real, but `path_type` is NOT Roborock's word for it and never was: per
+# docs/dev/24-roborock-adapter.md §8 the field name was invented in this project's initial
+# release, three weeks before adapters or a second brand existed, and Roborock later adopted
+# the field that was already canonical. The DEVICE's name for this control is the mop route
+# — `select.<obj>_mop_mode`, options standard / deep / deep_plus — the same pass-density
+# property Eufy calls clean_intensity and Dreame wires to `cleaning_route`.
+# wide/narrow was a placeholder, and it had a cost: `room_manager` defaults the field, so
+# every Roborock room on every install was persisted carrying `path_type: "wide"` — a value
+# the user never chose, on a picker that never rendered (has_path_control is False on every
+# catalogued model, and correctly so for the S6, owner-confirmed).
+#
+# Replacing the list makes that stored value un-declared, and `rooms/vocabulary_migration`
+# RESETS it on the next pass — deliberately, with NO `path_type_aliases` entry. An alias
+# would map wide -> standard and dress a default up as a decision; nobody picked wide, so
+# there is no intent to carry forward.
+#
+# Ranked ascending for the global pre-call: standard < deep < deep_plus. "custom" is a real
+# device option and is deliberately NOT declared — it is not a rung on this ladder (it means
+# "whatever the vendor app last configured"), so offering it would put an unrankable value
+# into a max-wins resolve where it can only be ignored.
 PATH_TYPE_OPTIONS: list[dict] = [
-    {"value": "wide", "label": "Wide"},
-    {"value": "narrow", "label": "Narrow"},
+    {"value": "standard", "label": "Standard"},
+    {"value": "deep", "label": "Deep"},
+    {"value": "deep_plus", "label": "Deep+"},
 ]
 
 # water_level from ``select.ivy_mop_intensity`` (off/low/medium/high) — maps 1:1

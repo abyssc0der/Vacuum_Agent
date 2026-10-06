@@ -750,6 +750,11 @@
       "fan_speed": {
         "turbo": "מקסימום"
       }
+    },
+    "path_type": {
+      "standard": "סטנדרטי",
+      "deep": "יסודי",
+      "deep_plus": "יסודי+"
     }
   },
   "map": {

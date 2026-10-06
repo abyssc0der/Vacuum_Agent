@@ -2630,6 +2630,11 @@
       "fan_speed": {
         "turbo": "Max"
       }
+    },
+    "path_type": {
+      "standard": "Standaard",
+      "deep": "Grondig",
+      "deep_plus": "Grondig+"
     }
   },
   "order_modal": {

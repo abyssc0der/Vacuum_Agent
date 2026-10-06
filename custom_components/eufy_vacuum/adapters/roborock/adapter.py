@@ -44,6 +44,7 @@ from .entities import (
     SUFFIX_TOTAL_CLEANING_COUNT,
     SUFFIX_WATER_BOX,
     SUFFIX_MOP_INTENSITY,
+    SUFFIX_MOP_MODE,
     DOMAIN_BINARY_SENSOR,
     DOMAIN_SELECT,
 )
@@ -148,8 +149,12 @@ def register_roborock_adapter_for_vacuum(
     # "Caught + logged, never aborts" remains true for the BEST-EFFORT entries (fan,
     # single-mode water). Corrected 2026-08-23.
     # (_run_global_pre_calls), so this degrades safely on a model that turns out unsettable.
-    # mop_mode (scrub depth) is a second GLOBAL select with no canonical per-group slot yet
-    # -> left out until there's a card control to drive it per group.
+    # mop_mode (the route / scrub depth) is a second GLOBAL select and is appended below,
+    # once _route_axis is known. It said here for a long time that it was "left out until
+    # there's a card control to drive it per group" — there already was one. The canonical
+    # slot is `path_type`, this brand's own name for the pass-density axis Eufy calls
+    # clean_intensity, and the card has rendered a picker for it all along; the axis was
+    # simply declared with values (wide/narrow) no Roborock has ever had. Issue #66.
     mop_pre_calls: list[dict] = []
     if mop_settable:
         mop_pre_calls = [
@@ -222,6 +227,56 @@ def register_roborock_adapter_for_vacuum(
             f" reason={dock['reason']}" if dock.get("reason") else "",
         )
 
+    # THE ROUTE AXIS IS DECIDED BY THE DEVICE, NOT THE CATALOGUE (issue #66).
+    #
+    # `has_path_control` is honest where it is SET: the S6's False is owner-confirmed on
+    # hardware. The problem is the DEFAULT — an uncatalogued model falls to DEFAULT_PROFILE,
+    # which also says False, so an S7 and a Saros 20 that both publish
+    # `select.<obj>_mop_mode` were told they have no route axis and the picker never
+    # rendered. Reported on an S7: "Vacuum Agent does not show any setting for the mop
+    # route or mop mode."
+    #
+    # Publishing the select IS the capability, so presence decides and the catalogue can
+    # only ADD to it. The S6 cannot regress: it has no such select, so the OR contributes
+    # nothing there. Computed ONCE because it feeds both the runtime hint and the config
+    # capabilities block the card reads — declaring it in one and not the other is exactly
+    # how supports_zone_clean ended up open at one end and unconnected at the other (D18).
+    _route_axis = bool(
+        profile.get("has_path_control", False)
+        or hass.states.get(build_entity_id(vid, SUFFIX_MOP_MODE, DOMAIN_SELECT)) is not None
+    )
+
+    # THE ROUTE PRE-CALL. Same shape as the water one above and for the same reason: the
+    # select is device-GLOBAL, so a batch cannot carry two depths at once. Per-room intent
+    # survives through PHASING — `phase_runner._dispatch_active_phase` re-runs global
+    # pre-calls per phase from THAT phase's rooms, so a strict-order run grouped by depth
+    # applies each group's own value, exactly as a vacuum group then a mop group each apply
+    # their own water.
+    #
+    # MAX-WINS, with no `mixed_mode_water_policy`. Water needs a "safest" policy because
+    # over-watering a dry room is damage; scrubbing a room deeper than asked only costs
+    # time, so the asymmetry that justifies the abort path there does not exist here.
+    #
+    # Gated on _route_axis (the select being present), not on mop_settable: the route is a
+    # capability of the dock/mop hardware the device reports for itself, and the S6 — whose
+    # mop is observe-only — has no such select, so this stays empty there.
+    if _route_axis:
+        mop_pre_calls.append(
+            {
+                "field": "path_type",
+                "rank": ["standard", "deep", "deep_plus"],
+                "service": {
+                    "domain": DOMAIN_SELECT,
+                    "service": "select_option",
+                    "value_key": "option",
+                    # BY ROLE, never a frozen id — these blocks are built before
+                    # `resolve_declared_entities` runs, and both reporters are on
+                    # non-English installs where the derived id does not exist.
+                    "target_role": "mop_mode",
+                },
+            }
+        )
+
     capability_hints: dict[str, bool] = {
         "supports_mop_features": profile["has_mop"],
         "supports_mop_wash": dock_washable,
@@ -229,7 +284,7 @@ def register_roborock_adapter_for_vacuum(
         "supports_empty_dust": dock_collectable,
         # Per-model, not brand-wide: the S6 has no path/route axis, but better models
         # do — see model_catalog.has_path_control for why every entry is False today.
-        "supports_path_control": profile.get("has_path_control", False),
+        "supports_path_control": _route_axis,
         # Declared False in the config capabilities block too (see ~:571). It must ALSO be
         # a hint: the room payload gate reads the runtime-detected capabilities payload
         # (manager.get_vacuum_capabilities -> data["capabilities"]), not the config block,
@@ -313,6 +368,14 @@ def register_roborock_adapter_for_vacuum(
         # overridable. Declared on EVERY model, including the S6 whose mop is
         # observe-only: the entity exists there too, and reading it is not setting it.
         "mop_intensity": build_entity_id(vid, SUFFIX_MOP_INTENSITY, DOMAIN_SELECT),
+        # The mop ROUTE select — the device control behind the per-room path_type axis
+        # (issue #66). Declared for exactly the reason mop_intensity above is: it is the
+        # target of a global pre-call, and a frozen literal inside dispatch.global_pre_calls
+        # is somewhere `resolve_declared_entities` never looks. Both reporters run non-
+        # English installs (`select.s7_modo_mopa`, and the German `wisch_modus`), so the
+        # derived id misses and the rescue has to carry it — which it can, because the
+        # upstream translation_key is `mop_mode` and matches this suffix exactly.
+        "mop_mode": build_entity_id(vid, SUFFIX_MOP_MODE, DOMAIN_SELECT),
     }
 
     # Rescue derived IDs that do not match this install (renamed device/entity, or a
@@ -889,7 +952,7 @@ def register_roborock_adapter_for_vacuum(
             # Per-room fan/water do not ride the app_segment_clean wire (global only).
             # The path/route axis is per-MODEL though, so read the catalog rather than
             # baking the S6's answer into the brand.
-            "supports_path_control": profile.get("has_path_control", False),
+            "supports_path_control": _route_axis,
             "supports_edge_mopping": False,
             # ⚠ "No dock" IS THE S6's ANSWER, DECLARED AT BRAND LEVEL, AND IT WINS.
             #

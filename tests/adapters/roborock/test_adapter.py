@@ -790,3 +790,99 @@ def test_d18_the_default_is_still_supported(monkeypatch, hass):
     assert "supports_zone_clean" not in model_catalog.profile_for_model(
         "roborock.vacuum.s6"
     ), "a catalogued model started declaring this — confirm it from device evidence"
+
+
+# --- the mop ROUTE axis (issue #66) ------------------------------------------
+
+
+def _route_pre_call(cfg):
+    """The path_type entry in dispatch.global_pre_calls, or None."""
+    for entry in (cfg.get("dispatch") or {}).get("global_pre_calls") or []:
+        if entry.get("field") == "path_type":
+            return entry
+    return None
+
+
+def test_rt_1_the_route_options_are_the_devices_own_vocabulary():
+    """[RT-1] path_type is declared with values a Roborock actually has.
+
+    It was wide/narrow, and no Roborock has ever had such a control. That mattered
+    beyond being wrong: `room_manager` defaults the field, so every Roborock room was
+    persisted carrying `path_type: "wide"` — measured on a reporter's install, all four
+    rooms — on a picker that never rendered. Replacing the list is what lets
+    rooms/vocabulary_migration RESET it, because it can only judge a value against a
+    declared list.
+
+    ABLATION: put wide/narrow back and this goes red.
+    """
+    values = [o["value"] for o in rbv.PATH_TYPE_OPTIONS]
+    assert values == ["standard", "deep", "deep_plus"], values
+    assert "wide" not in values and "narrow" not in values, (
+        "wide/narrow are back; a stored 'wide' becomes judgeable-as-valid again and the "
+        "migration will stop resetting it"
+    )
+
+
+def test_rt_2_no_route_axis_without_the_select(s6_config):
+    """[RT-2] THE NO-REGRESSION GUARD. The S6 has no mop-route select, so nothing appears.
+
+    model_catalog says `has_path_control: False` for the S6 and the comment records it as
+    owner-confirmed on hardware. Entity presence may only ADD, so a box without the select
+    must be byte-identical to before: capability off, and no route pre-call to dispatch.
+    """
+    assert s6_config["capabilities"]["supports_path_control"] is False
+    assert _route_pre_call(s6_config) is None
+
+
+def test_rt_3_the_select_turns_the_axis_on_even_on_an_uncatalogued_model(monkeypatch, hass):
+    """[RT-3] THE RED INPUT, from the report: "Vacuum Agent does not show any setting for
+    the mop route or mop mode" — an S7, which is not in the catalogue.
+
+    An uncatalogued model falls to DEFAULT_PROFILE, which declares has_path_control False,
+    so the catalogue alone can never turn this on for the models that actually have it.
+    The device publishing `select.<obj>_mop_mode` IS the capability.
+
+    ABLATION: drop the entity-presence OR from `_route_axis` and this goes red — the model
+    is uncatalogued, so the profile contributes False and nothing else would raise it.
+    """
+    clear_registry()
+    _patch_device(monkeypatch, manufacturer="Roborock", model="roborock.vacuum.a15")
+    hass.states.async_set(
+        _RVAC, "cleaning", {"supported_features": 30524, "fan_speed": "max"}
+    )
+    hass.states.async_set(build_entity_id(_RVAC, "_mop_mode", "select"), "standard")
+    rb.register_roborock_adapter_for_vacuum(hass, _RVAC)
+    cfg = get_adapter_config(_RVAC)
+
+    assert cfg["capabilities"]["supports_path_control"] is True
+
+    entry = _route_pre_call(cfg)
+    assert entry is not None, "the route pre-call was not declared"
+    # BY ROLE, not a frozen id: both reporters run non-English installs where the derived
+    # id does not exist, so a literal here would name an entity that is not there.
+    assert entry["service"]["target_role"] == "mop_mode"
+    assert entry["rank"] == ["standard", "deep", "deep_plus"]
+    # No safest-water policy: over-scrubbing costs time, not damage, so the abort path
+    # water needs has no counterpart here.
+    assert "mixed_mode_water_policy" not in entry
+
+
+def test_rt_4_the_route_select_is_declared_so_the_rescue_can_reach_it(monkeypatch, hass):
+    """[RT-4] The select must be a DECLARED entity, not only a dispatch literal.
+
+    This is issue #51's lesson applied to a second role: a target that exists only inside
+    dispatch.global_pre_calls is somewhere `resolve_declared_entities` never looks, so on a
+    localized install (`select.s7_modo_mopa`) the push names an entity that does not exist
+    and nothing rescues it. Declared, it resolves on the upstream translation_key and
+    becomes user-overridable.
+    """
+    clear_registry()
+    _patch_device(monkeypatch, manufacturer="Roborock", model="roborock.vacuum.a15")
+    hass.states.async_set(
+        _RVAC, "cleaning", {"supported_features": 30524, "fan_speed": "max"}
+    )
+    hass.states.async_set(build_entity_id(_RVAC, "_mop_mode", "select"), "standard")
+    rb.register_roborock_adapter_for_vacuum(hass, _RVAC)
+    cfg = get_adapter_config(_RVAC)
+
+    assert cfg["entities"]["mop_mode"] == "select.ivy_mop_mode"

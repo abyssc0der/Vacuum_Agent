@@ -2633,6 +2633,11 @@
       "fan_speed": {
         "turbo": "Max"
       }
+    },
+    "path_type": {
+      "standard": "Standard",
+      "deep": "Profonda",
+      "deep_plus": "Profonda+"
     }
   },
   "order_modal": {

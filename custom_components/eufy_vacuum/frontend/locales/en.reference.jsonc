@@ -105,6 +105,11 @@
       "normal": "Normal",  // cleaning path / intensity (manual-only)
       "standard": "Standard"  // cleaning path / intensity (Eufy app term; the dominant stored value)
     },
+    "path_type": {
+      "standard": "Standard",  // mop route: normal pass density
+      "deep": "Deep",  // mop route: tighter passes, slower
+      "deep_plus": "Deep+"  // mop route: tightest passes, slowest
+    },
     "metrics_tab": {
       "learning": "Learning",
       "rooms": "Rooms",

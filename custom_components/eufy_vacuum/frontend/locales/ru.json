@@ -2728,6 +2728,11 @@
       "fan_speed": {
         "turbo": "Макс"
       }
+    },
+    "path_type": {
+      "standard": "Стандарт",
+      "deep": "Глубокая",
+      "deep_plus": "Глубокая+"
     }
   },
   "order_modal": {

@@ -750,6 +750,11 @@
       "fan_speed": {
         "turbo": "최대"
       }
+    },
+    "path_type": {
+      "standard": "표준",
+      "deep": "꼼꼼",
+      "deep_plus": "꼼꼼+"
     }
   },
   "map": {

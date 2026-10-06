@@ -277,6 +277,18 @@ as a duplicate of an axis already carried. Roborock later adopted the field that
 canonical, which is why it now reads as Roborock's — and the giveaway is that one value appears in
 *both* brands' option lists for the axis.
 
+> **Partly resolved (issue #66).** The field name is still this project's invention and the
+> paragraph above stands. What changed is the *values*: the list was `wide`/`narrow`, which no
+> Roborock has ever offered, and it is now `standard`/`deep`/`deep_plus` — read off
+> `select.<obj>_mop_mode`, which both reporting devices publish. The axis had been declared but
+> never OFFERED (`has_path_control` is False on every catalogued model, correctly so for the S6),
+> while `room_manager` defaults the field, so every Roborock room on every install was persisted
+> carrying `path_type: "wide"` — a value nobody chose on a picker that never rendered.
+> `rooms/vocabulary_migration` resets it, with no alias declared on purpose: an alias would dress
+> a default up as a decision. `supports_path_control` is now the catalogue value OR live presence
+> of the select, so the device decides and the catalogue can only add; the S6 has no such select
+> and is unchanged. Covered by [RT-1]..[RT-4].
+
 **A correct exclusion is defended by a mechanically wrong reason.** A sentinel is excluded on the
 grounds that a Roborock error code could legitimately *contain* the word. The test is exact set
 membership after strip and lowercase, not containment, so only a state exactly equal to it was ever

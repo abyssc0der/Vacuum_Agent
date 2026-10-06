@@ -2646,6 +2646,11 @@
       "fan_speed": {
         "turbo": "Max"
       }
+    },
+    "path_type": {
+      "standard": "Standard",
+      "deep": "Approfondi",
+      "deep_plus": "Approfondi+"
     }
   },
   "order_modal": {

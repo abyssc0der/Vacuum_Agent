@@ -113,6 +113,18 @@ ADAPTER_CONFIG_SCHEMA: dict[str, dict] = {
                     "id stays wrong on a localized install (issue #51). Roborock only."
                 ),
             },
+            "mop_mode": {
+                "type": "str",
+                "required": False,
+                "description": (
+                    "Device-GLOBAL mop ROUTE select — the pass-density axis the framework "
+                    "carries as the per-room `path_type` field (Roborock: standard / deep / "
+                    "deep_plus). Declared as a ROLE for the same reason mop_intensity above "
+                    "is: the route global_pre_call names it via service.target_role, and a "
+                    "frozen id is wrong on every non-English install — both reports came "
+                    "from localized boxes (`select.s7_modo_mopa`). Issue #66. Roborock only."
+                ),
+            },
             "dock_firmware_version": {
                 "type": "str",
                 "required": False,
