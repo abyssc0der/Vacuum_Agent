@@ -120,11 +120,11 @@ currently in the state machine and usable now.
 | `rooms_unique_per_job` | `True` | `False` | - | - | - | - |
 | `supports_custom_room_config` | - | - | - | - | - | - |
 | `supports_edge_mopping` | `caps.get('supports_edge_mopping', True)` | `False` | `False` | - | - | `False` |
-| `supports_empty_dust` | `caps.get('supports_empty_dust', False)` | `False` | `caps.get('supports_empty_dust', station_collectable)` | `model_family in {'x10', 'x8', 'l60', 'l50'}` | - | `station_collectable` |
+| `supports_empty_dust` | `caps.get('supports_empty_dust', False)` | `dock_collectable` | `caps.get('supports_empty_dust', station_collectable)` | `model_family in {'x10', 'x8', 'l60', 'l50'}` | - | `station_collectable` |
 | `supports_goto` | - | - | `caps.get('supports_goto', False)` | - | - | `profile.get('has_path_control', False)` |
-| `supports_mop_dry` | `caps.get('supports_mop_dry', False)` | `False` | `caps.get('supports_mop_dry', station_dryable)` | `model_family in {'x10', 'x8'}` | - | `station_dryable` |
+| `supports_mop_dry` | `caps.get('supports_mop_dry', False)` | `dock_dryable` | `caps.get('supports_mop_dry', station_dryable)` | `model_family in {'x10', 'x8'}` | - | `station_dryable` |
 | `supports_mop_features` | `caps.get('supports_mop_features', False)` | `caps.get('supports_mop_features', profile['has_mop'])` | `caps.get('supports_mop_features', profile['has_mop'])` | `model_family in {'x10', 'x8', 'l60', 'l50'}` | - | `profile['has_mop']` |
-| `supports_mop_wash` | `caps.get('supports_mop_wash', False)` | `False` | `caps.get('supports_mop_wash', station_washable)` | `model_family in {'x10', 'x8'}` | - | `station_washable` |
+| `supports_mop_wash` | `caps.get('supports_mop_wash', False)` | `dock_washable` | `caps.get('supports_mop_wash', station_washable)` | `model_family in {'x10', 'x8'}` | - | `station_washable` |
 | `supports_passes` | - | - | - | - | - | - |
 | `supports_path_control` | `caps.get('supports_path_control', False)` | `_route_axis` | `profile.get('has_path_control', True)` | `model_family in {'x10', 'x8'}` | - | `profile.get('has_path_control', False)` |
 | `supports_robot_position` | `caps.get('supports_robot_position', False)` | `caps.get('supports_robot_position', False)` | - | - | - | - |
