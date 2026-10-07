@@ -8,11 +8,37 @@ Releases before 0.9.10 are recorded as
 [GitHub tags/releases](https://github.com/kingchddg901/Vacuum_Agent/releases)
 only.
 
-## [Unreleased]
+## [2.2.4] - 2026-10-07
+
+Most of this came from [#63](https://github.com/kingchddg901/Vacuum_Agent/issues/63), [#65](https://github.com/kingchddg901/Vacuum_Agent/issues/65) and [#66](https://github.com/kingchddg901/Vacuum_Agent/issues/66) — thanks to **@150d** and **@mactron254**, who kept reporting through a run of releases that each fixed part of what they were seeing.
+
+Two of the fixes below are for problems v2.2.3 itself caused. One of them nobody reported: on a Eufy vacuum the Rooms tab could come up empty although everything was configured. It was found on a live install while looking at something else. The other is the phantom-rooms problem on a two-floor Roborock, which v2.2.3 did not introduce so much as uncover — fixing one half of it is what let the other half surface.
+
+> **This release changes both the integration and the card**, so it needs a full Home Assistant restart, followed by a hard refresh of the dashboard (Ctrl+Shift+R) if anything still looks stale.
+
+### Added
+
+- **Dock controls on Roborock.** Wash mop, dry mop and empty dust are now offered on Roborock docks that have those functions, each gated on whether your particular dock can actually do it — a dock that only empties will not be given a wash button. Which functions exist is read from the vacuum's own dock description rather than guessed from the model name, so all five classes of Roborock dock are handled, from a bare charging dock to a full omni station.
+
+  **This means the Base Station tab now appears on a Roborock with a capable dock**, carrying those buttons. What it does not yet carry is the dock's own *activity* — noticing that a wash or dry has happened by itself — so the Recent Dock Activity panel stays empty and the water figures are blank. That needs a recording from a real dock mid-cycle, which no simulator can supply. A Roborock with no dock gets no tab, as before.
 
 ### Fixed
 
-- **On a vacuum with more than one map, choosing a live-map camera pinned every map to it.** The override is stored per vacuum and was consulted for whichever map you were looking at, so a second floor drew the first floor's backdrop. One user worked out the shape of this from the outside and had been re-pointing the setting by hand before each import, which is the bug handed back as a workaround. Picking a camera now applies to the map you are on, and the setting you already have keeps serving any map you have not chosen one for — so nothing you have configured changes, and you only set the floors you need to.
+- **A light Home Assistant theme hid half the interface.** On a light theme, tinted surfaces kept their dark-theme ink and rendered white on white — text, borders and whole panels disappeared. The card had assumed a dark background throughout. Tints are now derived from the text colour Home Assistant already sets to contrast with your background, so they follow your theme instead of being painted for one of them. The accent is handled separately and only shifted on light themes, decided from the colour your browser actually renders rather than from your operating system's setting, which is a different thing. Reported by **@150d**.
+
+- **Assigning an entity under Setup → System threw you out of the panel and lost the pick.** Choosing an entity for any role rebuilt the panel underneath you, dropped you back to the dashboard, and discarded what you had just chosen. This affected every brand, not only the one it was reported on. Your picks are also now kept per role rather than per vacuum, so setting one no longer silently clears another — in particular you no longer need to clear `work_mode` first to make your other choices stick. Reported by **@150d**, whose own reading of what the configuration dialog was doing turned out to be exactly right.
+
+- **The mop route setting never appeared on a Roborock.** It was described with values no Roborock reports, so it had nothing to match and was never offered. It is now driven by whether your vacuum actually has the control, and by whether that control has ever carried a value — an entity that exists but has never reported anything is not evidence of a capability, and treating it as one would have switched the setting on for models that cannot do it. Reported by **@mactron254**.
+
+  The four built-in room profiles and the custom profile were still writing the old route values, which would have left the newly visible picker showing nothing selected for any room using one. They now write values the picker offers.
+
+- **On a two-floor vacuum, the other floor's rooms were offered as new rooms that do not exist.** Rooms you already have, sitting on the map you were not looking at, appeared under "New rooms discovered" with a "reject as phantom" button beside them. The drift counters were kept in one list with no record of which map an entry belonged to, while every decision they feed is per map. On a brand that numbers each floor's rooms separately, the other floor's rooms therefore read as unknown; on a brand that restarts numbering at 1 for each floor, a genuinely new room was instead hidden behind the same number downstairs and never surfaced at all. v2.2.3 fixed the second of those, and in doing so exposed the first.
+
+  The counters now record which map they came from. Nothing needs resetting by hand: on a single-map vacuum your existing counters carry over, and on a multi-map one they are deliberately left behind rather than guessed at, and rebuild over the next few discovery passes.
+
+- **The Rooms tab could come up empty on a configured Eufy vacuum, while Setup said everything was complete.** Introduced in v2.2.3. The card is told which map it is looking at, and for Eufy that answer was taken from the map-switching dropdown's label — "Home (ID: 12)" — rather than the map's id. Every room then failed to match, and the first-run "no rooms yet" message appeared on a vacuum with rooms already configured. The same label was also saved as though it were a map, leaving a spare empty map in storage. The identity now comes from the map the integration has already resolved, and is checked against the maps your vacuum actually has before it is used. A spare map left behind by the old behaviour is harmless and can be ignored.
+
+- **On a vacuum with more than one map, choosing a live-map camera pinned every map to it.** The override was stored per vacuum and consulted for whichever map you were looking at, so a second floor drew the first floor's backdrop. One user worked out the shape of this from the outside and had been re-pointing the setting by hand before each import, which is the bug handed back as a workaround. Picking a camera now applies to the map you are on, and a setting you already have keeps serving any map you have not chosen one for — so nothing you have configured changes, and you only set the floors you need to.
 
 
 ## [2.2.3] - 2026-10-05
