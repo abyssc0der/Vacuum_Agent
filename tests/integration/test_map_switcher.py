@@ -37,6 +37,11 @@ Coverage
 [MSW-17] ...and `current` (raw, for the dropdown) and `current_map_id` (canonical, for
          identity) must diverge on a whitespace-named map, which is the input that
          exposed them being conflated.
+[MSW-18] REGRESSION (shipped in 2.2.3): rung 2's select is a display CONTROL, not an
+         identity source. On Eufy its state is a label ("Home (ID: 12)") while the map
+         id is "12", so `current_map_id` must come from the DECLARED role, never from
+         the swept select. Shipping the label emptied the Rooms tab and minted a
+         durable map bucket keyed by the label.
 """
 
 from __future__ import annotations
@@ -88,10 +93,14 @@ async def test_map_switcher_resolves_sibling_select(hass, manager, mock_config_e
     assert out == {
         "entity_id": sel_id,
         "current": "My home (ID: 6)",
-        # Canonical twin of `current`, for consumers using it as a map IDENTITY rather
-        # than as the dropdown's display text. Equal here because this map name carries
-        # no surrounding whitespace; [MSW-17] is the case where they differ.
-        "current_map_id": "My home (ID: 6)",
+        # None, NOT the label. This fixture wires the fork's select with NO declared
+        # active_map role, and rung 2's select is a display control — its state is
+        # "<name> (ID: <n>)", never a map id. With no role to read, the canonical field
+        # DECLINES rather than substituting display text ([MAP-ANCHOR-1]); the card then
+        # falls to its own lower rungs. [MSW-18] is the case where a role IS declared and
+        # this carries the real id. It used to assert the label here, which is the bug
+        # that shipped in 2.2.3.
+        "current_map_id": None,
         "options": ["My home (ID: 6)", "Testing map (ID: 7)"],
         "available": True,
         "frame_ungrounded": False,
@@ -405,4 +414,61 @@ async def test_msw17_the_two_current_fields_diverge_on_whitespace(hass, manager)
     )
     assert block["current_map_id"] == "Obergeschoss", (
         "the map identity must match the stripped key everything else is stored under"
+    )
+
+
+async def test_msw18_rung2_publishes_the_declared_role_id_not_the_select_label(
+    hass, manager, mock_config_entry
+):
+    """[MSW-18] REGRESSION, shipped in 2.2.3.
+
+    Rung 2 sweeps the live-map camera's device for the fork's `_map_select` and
+    republished ITS STATE as `current_map_id` -- the single field that
+    `src/state/rooms.js::activeMapId()` reads. On Eufy that state is a display label
+    while the map's id lives on the declared SENSOR role, so every room filtered out
+    (`String(attrs.map_id) !== String(mapId)`) and the Rooms tab rendered its first-run
+    empty state on a fully configured vacuum. `get_map_segments` then took the same
+    string into `ensure_map_bucket` and minted a durable nine-key map bucket keyed by
+    the label -- measured on a live install as `maps["vacuum.alfred"]["Home (ID: 12)"]`
+    beside the real `"12"`.
+
+    The two fields must DIVERGE here, which is the whole reason they are two fields:
+    `current` stays RAW so the dropdown can match it against `options` and hand it back
+    to `select.select_option`; `current_map_id` must be an identity.
+
+    Rung 1 is deliberately NOT changed -- on Roborock and Dreame the select's state IS
+    the storage key -- so this asserts the rung-2 path specifically.
+    """
+    cam_id, sel_id = _wire_fork_entities(
+        hass,
+        mock_config_entry,
+        select_state="Home (ID: 12)",
+        select_options=["Home (ID: 12)", "Upstairs (ID: 13)"],
+    )
+    register_adapter_config(
+        "vacuum.device123",
+        {
+            "adapter_id": "eufy",
+            "source": "code",
+            "entities": {"active_map": "sensor.device123_active_map"},
+        },
+    )
+    _set_active_map(hass, "device123", "12")
+
+    out = manager._resolve_map_switcher(
+        vacuum_entity_id="vacuum.device123", live_map_image_entity=cam_id
+    )
+
+    assert out is not None and out["entity_id"] == sel_id, (
+        "rung 2 must still bind the fork's select -- Eufy's declared role is a sensor "
+        "and would throw on select.select_option ([MSW-12])"
+    )
+    assert out["current"] == "Home (ID: 12)", (
+        "`current` is raw on purpose: the card marks the selected <option> by exact "
+        "match and sends the string straight back to select.select_option"
+    )
+    assert out["current_map_id"] == "12", (
+        "rung 2's select is a display CONTROL, not an identity source. Publishing its "
+        "label here is the 2.2.3 regression: it emptied the Rooms tab and minted a "
+        "persisted map bucket named 'Home (ID: 12)'."
     )

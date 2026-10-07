@@ -69,6 +69,25 @@ map's id.**
 > and left every downstream config block inert. A `if brand == …` branch here was rejected on the
 > same grounds it always is: core would be learning a brand.
 
+**A map switcher is a control, not an identity source.** `core/manager.py::_resolve_map_switcher`
+binds the select the card renders, over two rungs: the declared `active_map` role when it *is* a
+select (Roborock, Dreame), otherwise a sweep of the live-map camera's device for the fork's
+`_map_select` sibling (Eufy, whose role is a sensor). The block carries two fields on purpose and
+they answer different questions — `current` is the **raw** selector state, kept raw so the dropdown
+can match it against `options` and hand it straight back to `select.select_option`; `current_map_id`
+is the **identity**, and it is the one field `src/state/rooms.js::activeMapId()` reads.
+
+Only on rung 1 are those the same string. There the select's state *is* the storage key — a
+Roborock install's map keys are literally `"Main floor"` and `"Junk map"`. On rung 2 the swept
+select is display furniture whose state reads `"<name> (ID: <n>)"` while the id lives on the
+declared sensor, so `current_map_id` defers to `get_active_map_id` and inherits its
+`[MAP-ANCHOR-1]` validation: **decline, never substitute.**
+
+Publishing rung 2's label as the identity is what shipped in 2.2.3. Every room filtered out of the
+Rooms tab (`String(attrs.map_id) !== String(mapId)`), which rendered the first-run empty state on a
+fully configured vacuum, and `get_map_segments` carried the same string into `ensure_map_bucket`
+and minted a durable map bucket named after the label. Pinned by `[MSW-18]`.
+
 `rooms/source_refresh.py` is what makes a service-response brand look like an attribute brand to
 the *synchronous* discovery path. An async refresher runs at four async boundaries, flattens the
 response into the same list-of-dicts shape, and caches it in `hass.data` keyed by **map name**.
@@ -258,6 +277,7 @@ deleted map's rooms, so there is nothing to sweep.
 | a call with no `enabled_room_ids` is always a re-sync of an already-approved map | the first import of a map — before any user has seen the room list — is also one |
 | an ambiguous slug is never guessed at, anywhere in the cluster | true in two of the three copies; reconciliation's two builders are still first-wins |
 | the numeric `room_id` is the room | it is the device's segment number and it renumbers; the slug is the identity |
+| the map switcher's current selection is a map id | only where the declared role IS that select; the rung-2 sweep binds a display control reading `"<name> (ID: <n>)"`, so identity comes from `get_active_map_id`, not the dropdown |
 
 ---
 

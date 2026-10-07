@@ -6273,6 +6273,10 @@ class EufyVacuumManager:
             from homeassistant.helpers import entity_registry as er
 
             select_entity_id: str | None = None
+            # Which rung bound the select — load-bearing for `current_map_id` below,
+            # NOT cosmetic. Rung 1's select IS the map identity on its brands; rung 2's
+            # is a display control that happens to switch maps.
+            from_declared_role = False
 
             # RUNG 1 — the declared role. `select.` is load-bearing, not a tidy-up: the
             # card fires `select.select_option` on whatever comes back, and Eufy's
@@ -6287,6 +6291,7 @@ class EufyVacuumManager:
                 and self.hass.states.get(_declared_active_map) is not None
             ):
                 select_entity_id = _declared_active_map
+                from_declared_role = True
 
             # RUNG 2 — the fork's convention, for the brand whose role is a sensor.
             if select_entity_id is None:
@@ -6329,7 +6334,34 @@ class EufyVacuumManager:
                 # and refused to start a clean -- one fix undoing the other. Two fields
                 # because they answer two questions; one field could only be wrong for
                 # one of them.
-                "current_map_id": normalize_map_id(state.state) if available else None,
+                # RUNG 2's SELECT IS NOT AN IDENTITY SOURCE. Publishing its state here
+                # shipped a DISPLAY LABEL under a field this comment calls canonical, and
+                # the card's `activeMapId()` reads exactly this one field. On Eufy the
+                # fork's switcher reads "Home (ID: 12)" while the map's id is "12", so
+                # every room filtered out (`String(attrs.map_id) !== String(mapId)`) and
+                # the Rooms tab rendered its first-run empty state on a configured vacuum.
+                # `get_map_segments` then took the same string and minted a durable
+                # nine-key bucket for it, so the label became a persisted map key.
+                #
+                # Rung 1 is UNCHANGED and must stay that way: on Roborock and Dreame the
+                # select's state IS the storage key (`vacuum.ivy`'s keys are literally
+                # "Main floor" and "Junk map"), and normalize_map_id's whitespace strip is
+                # the #62 fix. Only rung 2 was ever wrong — the divergence is deliberate.
+                #
+                # Rung 2 defers to the canonical resolver instead, which reads the DECLARED
+                # role and validates it against the enumerable map ids ([MAP-ANCHOR-1],
+                # issue #60). It DECLINES rather than substitutes, so a boot window yields
+                # None and the card falls to its own rung 2 — the sensor — which its
+                # comment notes has always resolved Eufy correctly.
+                "current_map_id": (
+                    (
+                        normalize_map_id(state.state)
+                        if from_declared_role
+                        else self.resolve_active_map_id(vacuum_entity_id)
+                    )
+                    if available
+                    else None
+                ),
                 "options": list(state.attributes.get("options") or []),
                 "available": available,
                 "frame_ungrounded": ungrounded,
