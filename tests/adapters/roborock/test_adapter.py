@@ -886,3 +886,53 @@ def test_rt_4_the_route_select_is_declared_so_the_rescue_can_reach_it(monkeypatc
     cfg = get_adapter_config(_RVAC)
 
     assert cfg["entities"]["mop_mode"] == "select.ivy_mop_mode"
+
+
+def test_rt_5_a_present_but_unavailable_select_does_not_turn_the_axis_on(monkeypatch, hass):
+    """[RT-5] THE RED INPUT, falsified on the maintainer's own S6 before it shipped.
+
+    The first version of this gate was `hass.states.get(...) is not None`. The S6
+    PUBLISHES `select.<obj>_mop_mode` and that entity sits at `unavailable` forever,
+    because its mop is observe-only — SET_MOP_MODE returns RoborockUnsupportedFeature.
+    Mere presence would therefore have flipped supports_path_control True on the ONE
+    model whose catalogue entry says False and records it as owner-confirmed on hardware,
+    offering a Cleaning Path picker the device can only reject.
+
+    Presence is not evidence; a usable value is. `is_blank_state` covers unavailable AND
+    unknown, which is the stricter reading on purpose.
+
+    ABLATION: go back to `is not None` and this goes red while RT-3 (a select carrying a
+    real value) stays green — the asymmetry that let it through.
+    """
+    clear_registry()
+    _patch_device(monkeypatch, manufacturer="Roborock", model="roborock.vacuum.s6")
+    hass.states.async_set(
+        _RVAC, "cleaning", {"supported_features": 30524, "fan_speed": "max"}
+    )
+    # Present, and useless — exactly what the S6 does.
+    hass.states.async_set(build_entity_id(_RVAC, "_mop_mode", "select"), "unavailable")
+    rb.register_roborock_adapter_for_vacuum(hass, _RVAC)
+    cfg = get_adapter_config(_RVAC)
+
+    assert cfg["capabilities"]["supports_path_control"] is False, (
+        "an unavailable select turned the route axis on — the S6 is now offered a picker "
+        "its firmware rejects"
+    )
+    assert _route_pre_call(cfg) is None, "a route pre-call was declared for a dead select"
+
+
+def test_rt_6_an_unknown_select_is_also_not_evidence(monkeypatch, hass):
+    """[RT-6] The sibling case, so RT-5 cannot be satisfied by special-casing one word.
+
+    `unknown` means the entity exists but has never reported. That is not a capability
+    either, and treating it as one would make the picker appear and disappear with the
+    robot's sleep cycle. It resolves on the next refresh once a real value arrives.
+    """
+    clear_registry()
+    _patch_device(monkeypatch, manufacturer="Roborock", model="roborock.vacuum.a15")
+    hass.states.async_set(
+        _RVAC, "cleaning", {"supported_features": 30524, "fan_speed": "max"}
+    )
+    hass.states.async_set(build_entity_id(_RVAC, "_mop_mode", "select"), "unknown")
+    rb.register_roborock_adapter_for_vacuum(hass, _RVAC)
+    assert get_adapter_config(_RVAC)["capabilities"]["supports_path_control"] is False

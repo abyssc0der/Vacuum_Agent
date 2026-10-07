@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
@@ -242,10 +243,37 @@ def register_roborock_adapter_for_vacuum(
     # nothing there. Computed ONCE because it feeds both the runtime hint and the config
     # capabilities block the card reads — declaring it in one and not the other is exactly
     # how supports_zone_clean ended up open at one end and unconnected at the other (D18).
-    _route_axis = bool(
-        profile.get("has_path_control", False)
-        or hass.states.get(build_entity_id(vid, SUFFIX_MOP_MODE, DOMAIN_SELECT)) is not None
+    # PRESENCE IS NOT EVIDENCE -- the entity must carry a USABLE VALUE.
+    #
+    # This first read `hass.states.get(...) is not None`, and the maintainer's own S6
+    # falsified it on contact: it PUBLISHES `select.ivy_mop_mode` and that entity sits at
+    # `unavailable` forever, because the S6's mop is observe-only (SET_MOP_MODE returns
+    # RoborockUnsupportedFeature). Mere presence would therefore have flipped
+    # supports_path_control True on the one model whose catalogue entry says False and
+    # says it owner-confirmed on hardware -- offering a Cleaning Path picker that can only
+    # ever be rejected by the device.
+    #
+    # `is_blank_state` is the project's existing question ("did we actually get a value?"),
+    # reused rather than re-listing sentinels. It covers unavailable AND unknown, which is
+    # the stricter reading on purpose: an entity that has never reported a usable value is
+    # not evidence of a capability. A device asleep at registration simply reports no
+    # picker until the next refresh, which is self-healing and the honest answer.
+    #
+    # The catalogue half still wins unconditionally, so a model DECLARED to have the axis
+    # keeps it regardless of what its select is doing this second.
+    # ⚠ `entity_helpers.is_blank_state` would be the natural call here and a brand
+    # package MAY NOT REACH IT -- [ISO-1] keeps the adapter SDK to two adjudicated
+    # entries, and widening it is an architecture decision, not a bug fix. Home
+    # Assistant's own STATE_UNAVAILABLE / STATE_UNKNOWN are the canonical vocabulary
+    # for this question and are external, so they cross no boundary and re-list
+    # nothing private.
+    _route_state = hass.states.get(build_entity_id(vid, SUFFIX_MOP_MODE, DOMAIN_SELECT))
+    _route_usable = bool(
+        _route_state is not None
+        and str(_route_state.state).strip()
+        and _route_state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN)
     )
+    _route_axis = bool(profile.get("has_path_control", False) or _route_usable)
 
     # THE ROUTE PRE-CALL. Same shape as the water one above and for the same reason: the
     # select is device-GLOBAL, so a batch cannot carry two depths at once. Per-room intent

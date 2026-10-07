@@ -102,6 +102,16 @@ device**, not vacuum-entity commands. The act path was hardcoded to the `button`
 both the resolver and the send, so nothing an adapter declared could have reached them;
 that is what `dock_events.action_controls` fixed ([41 §4b](41-maintenance-and-the-dock.md)).
 
+**The route axis is gated on a USABLE value, not on the entity existing.** The first
+version of that gate asked only whether `select.<obj>_mop_mode` was present, and the
+maintainer's own S6 falsified it on contact: the S6 *publishes* that select and it sits at
+`unavailable` forever, because its mop is observe-only (`SET_MOP_MODE` returns
+`RoborockUnsupportedFeature`). Presence alone would therefore have turned
+`supports_path_control` **True** on the one model whose catalogue entry says False and
+records it owner-confirmed — offering a Cleaning Path picker the firmware can only reject.
+`unavailable` and `unknown` both disqualify; the catalogue half still wins unconditionally,
+so a model declared to have the axis keeps it. Covered by `[RT-5]`/`[RT-6]`.
+
 **Gated per function, not on `has_dock`.** An o1/oc collects but cannot wash and an o2
 washes but cannot collect, so each control rides the capability it depends on. Verified
 across all 44 dock types: 38 full, 4 partial (`o1`/`oc` empty-only, `o2` wash-only, `o3`
