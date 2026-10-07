@@ -936,3 +936,37 @@ def test_rt_6_an_unknown_select_is_also_not_evidence(monkeypatch, hass):
     hass.states.async_set(build_entity_id(_RVAC, "_mop_mode", "select"), "unknown")
     rb.register_roborock_adapter_for_vacuum(hass, _RVAC)
     assert get_adapter_config(_RVAC)["capabilities"]["supports_path_control"] is False
+
+
+def test_rt_7_every_builtin_profile_writes_a_route_value_the_picker_offers():
+    """[RT-7] The shoulder RT-1 leaves open: the OPTION LIST was corrected, the profiles
+    that WRITE into it were not.
+
+    `PATH_TYPE_OPTIONS` became standard/deep/deep_plus for issue #66, but all five
+    built-in profiles kept the old wide/narrow literals. A user applying "Vacuum Only
+    Quick" therefore stored `path_type: "wide"` -- out of vocabulary the moment it was
+    written -- and the route picker this release makes visible rendered with nothing
+    selected. It also quietly undid the vocabulary reset, which can only judge a value
+    against the declared list: the reset cleared the stale value, then the next profile
+    application put it straight back.
+
+    RT-1 could not catch this. It asserts the list is right and says nothing about who
+    writes into it, which is why the two drifted apart in the first place.
+
+    ABLATION: set any profile's path_type back to "wide" and this goes red.
+    """
+    offered = {o["value"] for o in rbv.PATH_TYPE_OPTIONS}
+
+    writers = {name: prof.get("path_type") for name, prof in rbv.ROOM_PROFILES.items()}
+    writers["CUSTOM_ROOM_PROFILE"] = rbv.CUSTOM_ROOM_PROFILE.get("path_type")
+
+    # Every profile DECLARES one -- an absent key would silently dodge the check below.
+    missing = [n for n, v in writers.items() if v is None]
+    assert not missing, f"profiles with no path_type at all: {missing}"
+
+    stale = {n: v for n, v in writers.items() if v not in offered}
+    assert not stale, (
+        f"these profiles write a route value the picker does not offer: {stale}. "
+        f"Offered: {sorted(offered)}. A stored value outside the declared list renders "
+        f"as nothing-selected and defeats the vocabulary reset."
+    )
