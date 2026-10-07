@@ -1104,3 +1104,171 @@ async def test_unload_tears_down_every_listener(hass, hass_storage, mock_config_
         "that function's teardown block — the unwind stack does not run on a normal "
         "unload."
     )
+
+
+# ---------------------------------------------------------------------------
+# [INIT-C41] the two override surfaces merge per ROLE  (ledger C41 / issue #63)
+# ---------------------------------------------------------------------------
+
+
+def test_init_c41_1_an_options_entry_does_not_erase_the_panels_roles():
+    """[INIT-C41-1] THE RED INPUT, from the report.
+
+    A user pins `work_mode` through the options flow at first config, then sets
+    `battery` from the panel's Setup tab. `set_entity_override` reloads the entry, the
+    merge runs, and under the old `{**stored, **entry_options}` — keyed by VACUUM — the
+    options dict replaced that vacuum's whole role map and `battery` was gone. The pick
+    never survived its own save.
+
+    ABLATION: restore the shallow per-vacuum merge and this goes red with battery absent.
+    """
+    from custom_components.eufy_vacuum import merge_entity_overrides
+
+    stored = {"vacuum.saros": {"battery": "sensor.saros_battery"}}
+    options = {"vacuum.saros": {"work_mode": "sensor.betriebsmodus"}}
+
+    merged = merge_entity_overrides(stored, options)
+    assert merged["vacuum.saros"] == {
+        "battery": "sensor.saros_battery",
+        "work_mode": "sensor.betriebsmodus",
+    }, "the panel's role was dropped by an unrelated options entry"
+
+
+def test_init_c41_2_entry_options_still_win_on_the_same_role():
+    """[INIT-C41-2] The other direction, so C41-1 cannot be satisfied by simply
+    ignoring the options flow.
+
+    Entry options remain the rescue path that works when the frontend does not, so on a
+    role BOTH surfaces set, the options value must still win. Only the GRANULARITY
+    changed — per role instead of per vacuum.
+    """
+    from custom_components.eufy_vacuum import merge_entity_overrides
+
+    merged = merge_entity_overrides(
+        {"vacuum.saros": {"battery": "sensor.from_panel"}},
+        {"vacuum.saros": {"battery": "sensor.from_options"}},
+    )
+    assert merged["vacuum.saros"]["battery"] == "sensor.from_options"
+
+
+def test_init_c41_3_a_malformed_options_entry_cannot_erase_a_working_store():
+    """[INIT-C41-3] An options entry that is not a role map carries nothing to merge, so
+    honouring it could only ever delete. It is ignored and warned about instead.
+
+    This is the asymmetry the rejection store already records in another form: an
+    unattributable value may suppress, but it may never destroy.
+    """
+    from custom_components.eufy_vacuum import merge_entity_overrides
+
+    merged = merge_entity_overrides(
+        {"vacuum.saros": {"battery": "sensor.from_panel"}},
+        {"vacuum.saros": ["not", "a", "role", "map"]},
+    )
+    assert merged["vacuum.saros"] == {"battery": "sensor.from_panel"}
+
+
+def test_init_c41_4_a_vacuum_known_only_to_the_options_flow_still_arrives():
+    """[INIT-C41-4] The merge must not become panel-only: a vacuum the panel store has
+    never seen, configured entirely through the options flow, still has to come through.
+    """
+    from custom_components.eufy_vacuum import merge_entity_overrides
+
+    merged = merge_entity_overrides(
+        {"vacuum.alfred": {"battery": "sensor.alfred_battery"}},
+        {"vacuum.ivy": {"task_status": "sensor.ivy_status"}},
+    )
+    assert set(merged) == {"vacuum.alfred", "vacuum.ivy"}
+    assert merged["vacuum.ivy"] == {"task_status": "sensor.ivy_status"}
+
+
+# ---------------------------------------------------------------------------
+# [INIT-PANEL] the panel survives OUR OWN reload  (issue #63)
+# ---------------------------------------------------------------------------
+#
+# ⚠ THESE SPY ON `frontend.async_remove_panel` RATHER THAN ASKING THE FRONTEND.
+# The first version asserted `frontend.async_panel_exists(...)` and PASSED VACUOUSLY:
+# this harness never sets up the `frontend`/`panel_custom` components, so no panel is
+# ever really registered and "it is absent after unload" was true before the unload too.
+# The positive control caught it. What the fix actually changes is whether the removal
+# is CALLED, so that is what these assert.
+
+
+def _spy_remove_panel(monkeypatch):
+    """Record every async_remove_panel(url) the unload path makes."""
+    from custom_components.eufy_vacuum import frontend as _fe
+
+    removed: list[str] = []
+    real = _fe.async_remove_panel
+
+    def _spy(hass_, panel_url, *a, **kw):
+        removed.append(panel_url)
+        try:
+            return real(hass_, panel_url, *a, **kw)
+        except Exception:
+            return None
+
+    monkeypatch.setattr(_fe, "async_remove_panel", _spy)
+    return removed
+
+
+async def test_init_panel_1_a_genuine_unload_still_removes_the_panel(
+    hass, hass_storage, mock_config_entry, monkeypatch
+):
+    """[INIT-PANEL-1] THE CONTROL, and it has to come first.
+
+    A panel left registered against an integration that is gone is worse than the bug
+    being fixed. If this goes red, the override fix has turned every unload into a leak
+    and INIT-PANEL-2 is proving nothing.
+    """
+    hass.states.async_set(_VAC, "docked", {"supported_features": 0})
+    hass_storage[_STORAGE_KEY] = _boot_storage_one_room()
+    assert await _setup(hass, mock_config_entry) is True
+
+    panels = list(hass.data.get(DOMAIN, {}).get(f"_panels_{mock_config_entry.entry_id}", []))
+    assert panels, "positive control: the ledger is empty, so removal proves nothing"
+
+    removed = _spy_remove_panel(monkeypatch)
+    assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    missed = [u for u in panels if u not in removed]
+    assert not missed, f"a genuine unload did not remove: {missed}"
+
+
+async def test_init_panel_2_the_panel_survives_the_override_reload(
+    hass, hass_storage, mock_config_entry, monkeypatch
+):
+    """[INIT-PANEL-2] THE RED INPUT, from issue #63.
+
+    `set_entity_override` reloads the config entry so the new override reaches the
+    adapter, the capabilities and the platforms. Unload used to remove the panel
+    unconditionally — so the panel the user was STANDING ON disappeared mid-action, Home
+    Assistant bounced them to their default dashboard, and the in-flight render call died
+    with it. That is the whole of "appears to crash (screen exit)".
+
+    ABLATION: drop the `_keep_panels` branch from async_unload_entry and this goes red
+    while INIT-PANEL-1 stays green — the asymmetry that let the eject ship, because every
+    existing test exercised the genuine-unload path.
+    """
+    hass.states.async_set(_VAC, "docked", {"supported_features": 0})
+    hass_storage[_STORAGE_KEY] = _boot_storage_one_room()
+    assert await _setup(hass, mock_config_entry) is True
+
+    panels = list(hass.data.get(DOMAIN, {}).get(f"_panels_{mock_config_entry.entry_id}", []))
+    assert panels, "positive control: the ledger is empty"
+
+    # Exactly what services/setup.py::set_entity_override does before reloading.
+    hass.data.setdefault(DOMAIN, {})["_panel_survives_reload"] = mock_config_entry.entry_id
+
+    removed = _spy_remove_panel(monkeypatch)
+    assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    took = [u for u in panels if u in removed]
+    assert not took, (
+        f"the override reload removed {took} — the user is ejected to their default "
+        f"dashboard mid-action"
+    )
+    # And the ledger must survive too, or setup rebuilds it from nothing and the next
+    # genuine unload has no panels to tear down.
+    assert hass.data.get(DOMAIN, {}).get(f"_panels_{mock_config_entry.entry_id}") == panels

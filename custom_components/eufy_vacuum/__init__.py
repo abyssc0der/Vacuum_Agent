@@ -285,6 +285,47 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 # ----------------------------------------------------------------------
 
 
+def merge_entity_overrides(
+    stored: dict | None, entry_options: dict | None
+) -> dict[str, dict]:
+    """Merge the panel's override store with the options flow's, PER ROLE.
+
+    live:ENT-7 / ledger C41. Two surfaces write one contract: the panel's Setup tab
+    writes ``manager.data[ENTITY_OVERRIDES_KEY]``, and the options flow can only write
+    config-entry OPTIONS, because a flow has no business mutating runtime state.
+
+    Entry options WIN, because the options flow is the guaranteed-reachable rescue path
+    — the one still available when the frontend is not. But winning is PER ROLE, and it
+    used to be per VACUUM: the merge was ``{**stored, **entry_options}`` keyed by vacuum
+    entity id, so an options dict holding one role replaced that vacuum's whole role map
+    and silently dropped every role the panel had set.
+
+    That is not a corner case. ``set_entity_override`` reloads the config entry itself,
+    so a panel pick did not survive its own save on any install that had ever used the
+    options flow — which is the first-config path. Reported in issue #63 as "the setting
+    change itself is not made", by a user who had pinned ``work_mode`` at first config
+    and could not understand why nothing he picked afterwards stuck.
+
+    A non-dict options entry is IGNORED rather than honoured: it carries no roles to
+    merge, and letting it through would erase a working panel store to satisfy a
+    malformed one.
+    """
+    merged: dict[str, dict] = {}
+    for vac, roles in (stored or {}).items():
+        if isinstance(roles, dict):
+            merged[vac] = dict(roles)
+    for vac, roles in (entry_options or {}).items():
+        if not isinstance(roles, dict):
+            _LOGGER.warning(
+                "eufy_vacuum: entry options %s[%r] is %s, not a role map — ignoring it "
+                "rather than replacing the stored overrides",
+                ENTITY_OVERRIDES_KEY, vac, type(roles).__name__,
+            )
+            continue
+        merged.setdefault(vac, {}).update(roles)
+    return merged
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Vacuum Agent from a config entry."""
     hass.data.setdefault(DOMAIN, {})
@@ -428,12 +469,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _brand_data = manager.data
         _entry_overrides = entry.options.get(ENTITY_OVERRIDES_KEY)
         if isinstance(_entry_overrides, dict) and _entry_overrides:
+            # Per ROLE, not per vacuum — see merge_entity_overrides (ledger C41 / #63).
             _brand_data = {
                 **manager.data,
-                ENTITY_OVERRIDES_KEY: {
-                    **(manager.data.get(ENTITY_OVERRIDES_KEY) or {}),
-                    **_entry_overrides,
-                },
+                ENTITY_OVERRIDES_KEY: merge_entity_overrides(
+                    manager.data.get(ENTITY_OVERRIDES_KEY), _entry_overrides
+                ),
             }
 
         for _vacuum_entity_id in manager.get_known_vacuum_ids():
@@ -875,6 +916,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         _url, exc_info=True,
                     )
             hass.data.get(DOMAIN, {}).pop(f"_panels_{entry.entry_id}", None)
+            # Setup failed, so there is no reload to survive INTO. Clearing the marker
+            # stops a later genuine unload from skipping teardown (issue #63).
+            hass.data.get(DOMAIN, {}).pop("_panel_survives_reload", None)
 
         _unwind_stack.append(_undo_panels)
         _vacuum_records = manager.data.get("vacuums", {}) or {}
@@ -920,6 +964,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 _LOGGER.debug("eufy_vacuum: fallback panel /%s already registered", fallback_panel_url)
 
         hass.data[DOMAIN][f"_panels_{entry.entry_id}"] = registered_panels
+        # The reload that asked the panel to survive is over; anything later is a
+        # genuine unload and must tear down normally (issue #63).
+        hass.data[DOMAIN].pop("_panel_survives_reload", None)
 
         return True
     except Exception:
@@ -957,7 +1004,35 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         invalidate_room_source_cache(hass)
 
         domain_data = hass.data.get(DOMAIN, {})
-        for panel_url in domain_data.pop(f"_panels_{entry.entry_id}", []):
+
+        # ISSUE #63 — DO NOT TAKE THE PANEL DOWN DURING OUR OWN RELOAD.
+        #
+        # `set_entity_override` reloads the config entry so the new override reaches the
+        # adapter, the capability set and the entity platforms. A reload is unload + setup,
+        # and unload used to remove the panel unconditionally — so the panel the user was
+        # STANDING ON vanished, the frontend had nowhere to be, and Home Assistant bounced
+        # them to their default dashboard. The in-flight get_map_render_data died with it,
+        # which is the error toast they saw. Reported as "the integration shows an error
+        # message and appears to crash (screen exit)" — it was not a crash; the screen was
+        # unregistered.
+        #
+        # The panel IS re-registered by the setup half a moment later, so removing it only
+        # ever created a gap. `async_register_vacuum_panel` already returns cleanly on a
+        # duplicate url (its `except ValueError` branch), and the setup loop does not pass
+        # `replace`, so leaving the panel live makes that re-registration a no-op.
+        #
+        # SCOPED TO THE RELOAD THAT SET THE MARKER. A genuine unload — integration removed,
+        # HA shutting down — still removes the panel, because a panel pointing at an
+        # integration that is gone is worse than a gap. If setup fails after this, the
+        # `_undo_panels` unwind removes them and clears the marker.
+        _keep_panels = domain_data.get("_panel_survives_reload") == entry.entry_id
+        for panel_url in (
+            domain_data.get(f"_panels_{entry.entry_id}", [])
+            if _keep_panels
+            else domain_data.pop(f"_panels_{entry.entry_id}", [])
+        ):
+            if _keep_panels:
+                continue
             # panel_custom doesn't expose an unregister API; the panel is
             # registered into HA's frontend component, which is where the
             # remove helper lives.

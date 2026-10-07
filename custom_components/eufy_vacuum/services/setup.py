@@ -399,6 +399,20 @@ def register(hass: HomeAssistant) -> None:
 
         entries = hass.config_entries.async_entries(DOMAIN)
         if entries:
+            # ISSUE #63 — ASK THE PANEL TO SURVIVE THIS RELOAD.
+            #
+            # The reload is real work and stays: an override changes which entity a role
+            # resolves to, which can change the capability set and therefore which
+            # maintenance sensors exist, and only a platform reload adds or removes those.
+            #
+            # What must NOT happen is the panel going with it. This service is invoked
+            # FROM the panel's Setup tab, so unregistering it ejects the user to their
+            # default dashboard mid-action and kills their in-flight render call — which
+            # is the whole of the "appears to crash (screen exit)" report. The marker is
+            # read by async_unload_entry; async_setup_entry clears it, and the mid-setup
+            # unwind clears it too so a failed reload cannot leave a panel pointing at a
+            # dead integration.
+            hass.data.setdefault(DOMAIN, {})["_panel_survives_reload"] = entries[0].entry_id
             hass.async_create_task(
                 hass.config_entries.async_reload(entries[0].entry_id)
             )
