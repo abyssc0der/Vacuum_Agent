@@ -55,6 +55,7 @@ SUFFIX_WATER_BOX = "_water_box_attached"         # binary_sensor — water tank 
 DOMAIN_SENSOR = "sensor"
 DOMAIN_BINARY_SENSOR = "binary_sensor"
 DOMAIN_SELECT = "select"
+DOMAIN_SWITCH = "switch"            # the dock controls (issue #66 / dock §10)
 DOMAIN_NUMBER = "number"
 DOMAIN_BUTTON = "button"
 

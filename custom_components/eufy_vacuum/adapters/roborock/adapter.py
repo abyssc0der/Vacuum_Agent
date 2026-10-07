@@ -43,6 +43,7 @@ from .entities import (
     SUFFIX_LAST_CLEAN_END,
     SUFFIX_TOTAL_CLEANING_COUNT,
     SUFFIX_WATER_BOX,
+    DOMAIN_SWITCH,
     SUFFIX_MOP_INTENSITY,
     SUFFIX_MOP_MODE,
     DOMAIN_BINARY_SENSOR,
@@ -276,6 +277,46 @@ def register_roborock_adapter_for_vacuum(
                 },
             }
         )
+
+    # DOCK CONTROLS, GATED PER FUNCTION (REFERENCE-roborock-dock-detection.md §10).
+    #
+    # Not one blanket has_dock gate: this file already explains why, a few lines up —
+    # "an o1/oc auto-empty dock collects but cannot wash, and an o2 washes but cannot
+    # collect. Keying all three off has_dock would offer a mop wash on a dock with no
+    # water in it." The same reasoning decides which CONTROLS exist, so each rides the
+    # capability it actually depends on. An S6 resolves none and gets no block at all,
+    # which `test_no_dock` pins.
+    #
+    # MEASURED, not inferred (harness roborock-dock-sweep, HA 2026.10.0b2 /
+    # python-roborock 7.12.0, dock_type=o4_dock): the dock publishes
+    # switch.<obj>_dock_mop_washing / _dock_mop_drying / _dock_dust_emptying on a SECOND
+    # device, and all 6 of its buttons are disabled reset_*_consumable. A reporter's real
+    # Saros 20 Sonic matches entity-for-entity.
+    #
+    # TWO SUFFIXES EACH. The first is the English derived id the measurement produced;
+    # the second is the upstream translation_key, which is the rung that carries a
+    # LOCALIZED install where the derived id does not exist. Both reports came from
+    # non-English boxes.
+    _SW = {"domain": DOMAIN_SWITCH, "service": "turn_on"}
+    _dock_controls: dict[str, dict] = {}
+    if dock_washable:
+        _dock_controls["wash_mop"] = {
+            "entity_suffixes": ["dock_mop_washing", "mop_washing"], **_SW,
+        }
+    if dock_dryable:
+        # ONE entity, two actions, inverse services (upstream APP_SET_DRYER_STATUS 1/0).
+        # This pair is why action_controls carries a service at all.
+        _dock_controls["dry_mop"] = {
+            "entity_suffixes": ["dock_mop_drying", "mop_drying"], **_SW,
+        }
+        _dock_controls["stop_dry_mop"] = {
+            "entity_suffixes": ["dock_mop_drying", "mop_drying"],
+            "domain": DOMAIN_SWITCH, "service": "turn_off",
+        }
+    if dock_collectable:
+        _dock_controls["empty_dust"] = {
+            "entity_suffixes": ["dock_dust_emptying", "dust_emptying"], **_SW,
+        }
 
     capability_hints: dict[str, bool] = {
         "supports_mop_features": profile["has_mop"],
@@ -968,15 +1009,34 @@ def register_roborock_adapter_for_vacuum(
             # Base Station tab on these same literals, so no amount of correct dock
             # detection can turn that tab on for a dock-having Roborock.
             #
+            # FIXED, by taking the first of the two options the paragraph below names:
+            # these read `dock_profile`'s live answers now, exactly as
+            # `supports_path_control` above reads `_route_axis`. The same three variables
+            # already feed the capability HINTS ~700 lines up, so the two dictionaries
+            # can no longer disagree, and a refresh re-deriving from this block
+            # re-derives the truth.
+            #
+            # MEASURED on the vendor simulator before touching it (harness
+            # roborock-dock-sweep, HA 2026.10.0b2 / python-roborock 7.12.0): an o4_dock
+            # publishes switch.<obj>_dock_mop_washing / _dock_mop_drying /
+            # _dock_dust_emptying on a SECOND device, and every button on the config
+            # entry is a disabled reset_*_consumable. The controls were always there;
+            # these literals were the only thing hiding them.
+            #
+            # Lands WITH the dock_events.action_controls declaration, never before it:
+            # flipping these alone opens a Base Station tab whose action cards default
+            # to SHOWN -- four buttons that resolve nothing.
+            #
+            # The original note, kept because it still maps the OTHER option:
             # Left as-is in a prose pass because the fix is a real change with a real
             # blast radius — either these read from `dock_profile` like
             # `supports_path_control` reads from the catalog directly above, or the
             # brand persists its hints so a refresh stops overwriting them. Both are
             # capability-surface decisions, not comment edits. Same family as D18:
             # resolved at one end, hardcoded at the other, and it reads as deliberate.
-            "supports_mop_wash": False,
-            "supports_mop_dry": False,
-            "supports_empty_dust": False,
+            "supports_mop_wash": dock_washable,
+            "supports_mop_dry": dock_dryable,
+            "supports_empty_dust": dock_collectable,
             "supports_station_water": False,
             "supports_robot_position": caps.get("supports_robot_position", False),
             # Conservative defaults pending a live segment-clean run (Wave 2).
@@ -1067,8 +1127,45 @@ def register_roborock_adapter_for_vacuum(
         # passes are global, mop unsettable). Wave 3: live_transition.native_transition_source (native current_room
         # live rollover, filtered to job targets).
         # OMITTED (no dock / framework defaults suffice):
-        #   dock_events, post_job_wash_amendment, water_model_configs,
+        #   post_job_wash_amendment, water_model_configs,
         #   settings_selects, anomaly, live_transition.
+        #
+        # dock_events is NO LONGER omitted, and "no dock" was the wrong reason: plenty of
+        # Roborocks have one. REFERENCE-roborock-dock-detection.md §9 ruled the controls
+        # unreachable ("no wash/dry/empty BUTTONS exist ... a real 'no' with a mechanism.
+        # Do not chase it"), and §10 reopened it — the buttons half is right, the mechanism
+        # half is not.
+        # --- dock controls (REFERENCE-roborock-dock-detection.md §10) -------------
+        #
+        # MEASURED on the vendor's own simulator, not inferred: harness
+        # .claude/notes/harness/roborock-dock-sweep, HA 2026.10.0b2 / python-roborock
+        # 7.12.0, dock_type=o4_dock. That device publishes 45 entities across TWO devices,
+        # every one of its 6 buttons is a disabled reset_*_consumable, and the three dock
+        # functions are SWITCHES:
+        #
+        #     switch.<obj>_dock_mop_washing     translation_key mop_washing
+        #     switch.<obj>_dock_mop_drying      translation_key mop_drying
+        #     switch.<obj>_dock_dust_emptying   translation_key dust_emptying
+        #
+        # A reporter's real Saros 20 Sonic matches entity-for-entity, so the simulator is
+        # not standing in for one user's box.
+        #
+        # TWO SUFFIXES EACH, and both earn their place. The first is the English derived
+        # id this measurement produced. The second is the upstream translation_key, which
+        # is what the act-path ladder's rung 3 matches — and that is the rung that carries
+        # a localized install, where the derived id does not exist at all. Both reports
+        # came from non-English boxes (`select.s7_modo_mopa`; a German Saros).
+        #
+        # dry_mop and stop_dry_mop are deliberately the SAME entity with inverse services
+        # (upstream APP_SET_DRYER_STATUS 1 and 0). That pair is why `action_controls`
+        # carries a service at all; the old action_buttons schema could not say it.
+        #
+        # Spliced in only when a control resolved; absent entirely on a dockless
+        # unit, which is what test_no_dock pins. `enabled` and `triggers` are NOT
+        # declared: those are the EVENT path and need a real device's state vocabulary,
+        # which the simulator cannot supply. Declaring `enabled` without `triggers`
+        # opens the Base Station tab with activity counters stuck at zero.
+        **({"dock_events": {"action_controls": _dock_controls}} if _dock_controls else {}),
         #
         # room_profiles is NO LONGER omitted. "Framework defaults suffice" was wrong for
         # this one: the in-code catalog is EUFY's (Eufy declares it by reference), so

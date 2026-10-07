@@ -76,6 +76,51 @@ first time a model shipped with a different station.
 
 ---
 
+## 3a. The dock controls are switches, and that is why they were unreachable
+
+The dock is resolved live (§3). Driving it was a separate problem, and the answer had been
+written down backwards.
+
+`.claude/notes/REFERENCE-roborock-dock-detection.md` §9 ruled: *"No wash/dry/empty BUTTONS
+exist in the Roborock integration — our four `dock_controls` are Eufy's vocabulary;
+Roborock drives them through the vacuum entity. A real 'no' with a mechanism. Do not chase
+it."* Half of that is right and half is not, and the half that is wrong is the half that
+mattered.
+
+**Measured on the vendor's own simulator** (harness `roborock-dock-sweep`, HA 2026.10.0b2 /
+python-roborock 7.12.0, `dock_type=o4_dock`), and matching a reporter's real Saros 20 Sonic
+entity-for-entity:
+
+| | |
+|---|---|
+| entities on the config entry | 45, across **two devices** — the dock is its own device |
+| buttons | 6, **all** `reset_*_consumable`, **all disabled** |
+| wash / dry / empty | `switch.<obj>_dock_mop_washing` · `_dock_mop_drying` · `_dock_dust_emptying` |
+
+So there are no dock buttons — §9 was right — and the functions are **switches on the dock
+device**, not vacuum-entity commands. The act path was hardcoded to the `button` domain at
+both the resolver and the send, so nothing an adapter declared could have reached them;
+that is what `dock_events.action_controls` fixed ([41 §4b](41-maintenance-and-the-dock.md)).
+
+**Gated per function, not on `has_dock`.** An o1/oc collects but cannot wash and an o2
+washes but cannot collect, so each control rides the capability it depends on. Verified
+across all 44 dock types: 38 full, 4 partial (`o1`/`oc` empty-only, `o2` wash-only, `o3`
+wash+empty), 2 with no `dock_events` block at all.
+
+**Two suffixes per control.** The first is the English derived id; the second is the upstream
+`translation_key`, which is the rung that carries a localized install. That rung is not
+optional here: of the 49 languages HA ships for roborock, **17 translate these three switch
+names and 32 translate none** — no partials — and both reporters sit in the translated 17
+(`de`, `es`). Verified against the real translated ids for all 17.
+
+**Still not declared: `enabled` and `triggers`.** Those are the EVENT path — which state
+strings mean a wash happened — and they need a real device's vocabulary. The simulator
+reports whatever `RoborockStateCode` the library defines, and that enum annotates five
+members per model with no `a279` among them. Declaring `enabled` without `triggers` opens
+the Base Station tab with activity counters that can only read zero.
+
+---
+
 ## 4. Where the reverse port sent the bill
 
 Five places where being second cost a declaration, a new name, or a change to core.
