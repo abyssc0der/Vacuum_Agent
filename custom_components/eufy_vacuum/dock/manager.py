@@ -70,6 +70,34 @@ def _display_label(value: Any) -> str | None:
     return str(value).replace("_", " ").title()
 
 
+def _dock_control(adapter_cfg: dict, action: str) -> dict:
+    """One dock action's DECLARATION, with the defaults applied.
+
+    The adapter says how its dock is driven; nothing here assumes a domain. Defaults
+    keep every brand that shipped before this byte-identical: an entry that names
+    neither domain nor service is a button press, which is what `action_buttons`
+    hardcoded for everyone.
+
+    `service` is REQUIRED once a non-button domain is declared, and is deliberately
+    not guessed. "switch" could mean turn_on or turn_off and the pair that motivated
+    this shape uses BOTH on one entity (Roborock dry_mop / stop_dry_mop), so a
+    default here would be a coin flip on a physical action. Undeclared -> None, and
+    the caller refuses rather than pressing something.
+    """
+    entry = ((adapter_cfg or {}).get("dock_events", {}).get("action_controls", {}) or {}).get(action) or {}
+    domain = str(entry.get("domain") or "button").strip() or "button"
+    service = entry.get("service")
+    if not service:
+        service = "press" if domain == "button" else None
+    return {
+        "entity_suffixes": entry.get("entity_suffixes", []) or [],
+        "token_sets": entry.get("token_sets", []) or [],
+        "domain": domain,
+        "service": str(service) if service else None,
+        "data": entry.get("data") or {},
+    }
+
+
 class DockManager:
     """Owns dock action dispatch, status gating, and event recording."""
 
@@ -98,18 +126,16 @@ class DockManager:
         """Return the upstream button entity for one dock action.
 
         Resolution is adapter-driven: entity_suffixes (appended to
-        'button.{object_id}_') are tried first, then token_sets as registry
-        fallbacks. An action absent from dock_events.action_buttons resolves
-        to None (the action is reported unavailable).
+        '<domain>.{object_id}_', the domain the ADAPTER declares) are tried
+        first, then token_sets as registry fallbacks. An action absent from
+        dock_events.action_controls resolves to None (reported unavailable).
         """
         from ..adapters.registry import get_adapter_config as _get_adapter_config
 
         object_id = vacuum_entity_id.split(".", 1)[1]
-        all_actions = (
-            (_get_adapter_config(vacuum_entity_id) or {})
-            .get("dock_events", {})
-            .get("action_buttons", {})
-        )
+        _adapter_cfg = _get_adapter_config(vacuum_entity_id) or {}
+        all_actions = (_adapter_cfg.get("dock_events", {}) or {}).get("action_controls", {}) or {}
+        control = _dock_control(_adapter_cfg, action)
         action_cfg = all_actions.get(action, {})
 
         registry = er.async_get(self._hass)
@@ -123,8 +149,8 @@ class DockManager:
         _resolved, _status = resolve_action_entity(
             self._hass, registry,
             vacuum_entity_id=vacuum_entity_id,
-            domain="button",
-            suffixes=action_cfg.get("entity_suffixes", []),
+            domain=control["domain"],
+            suffixes=control["entity_suffixes"],
         )
         if _resolved is not None and _status == "resolved":
             clear_disabled_action_warning(
@@ -160,7 +186,12 @@ class DockManager:
             for tokens in (cfg or {}).get("token_sets", [])
         ]
 
-        for tokens in action_cfg.get("token_sets", []):
+        # BUTTON DOMAIN ONLY. The registry scan below is hardcoded to the
+        # `button.{object_id}_` prefix, so running it for a switch- or select-driven
+        # control would search the wrong domain and could only ever return a wrong
+        # entity or nothing. A non-button control declares entity_suffixes, which
+        # resolve through the ladder above and survive a localized install anyway.
+        for tokens in (control["token_sets"] if control["domain"] == "button" else []):
             entity_id = self._manager._find_button_entity_by_tokens(
                 object_id=object_id,
                 required_tokens=tokens,
@@ -410,10 +441,38 @@ class DockManager:
             }
 
         entity_id = action_status.get("entity_id")
+
+        # CALL WHAT THE ADAPTER DECLARED. This was a literal button.press, which is
+        # why a brand whose dock is switch-driven could not be supported by declaring
+        # anything: the domain was fixed in the resolver AND here, so even a resolved
+        # entity would have been pressed as a button. Read through the same helper the
+        # resolver uses, so the two cannot disagree about what this control is.
+        from ..adapters.registry import get_adapter_config as _get_adapter_config
+        _control = _dock_control(_get_adapter_config(vacuum_entity_id) or {}, action)
+        if not _control["service"]:
+            # A non-button domain with no service declared. Refuse rather than guess:
+            # "switch" alone does not say turn_on or turn_off, and this is a physical
+            # action on someone's hardware.
+            _LOGGER.warning(
+                "%s: dock action %r declares domain %r with no service — refusing to "
+                "guess one; declare dock_events.action_controls[%r].service",
+                vacuum_entity_id, action, _control["domain"], action,
+            )
+            return {
+                "vacuum_entity_id": vacuum_entity_id,
+                "map_id": str(map_id),
+                "action": action,
+                "performed": False,
+                "allowed": False,
+                "reason": "control_service_undeclared",
+                "message": f"{action}: no service declared for domain {_control['domain']!r}",
+                "dock_status": status.get("dock_status"),
+                "lifecycle_state": status.get("lifecycle_state"),
+            }
         await self._hass.services.async_call(
-            "button",
-            "press",
-            {"entity_id": entity_id},
+            _control["domain"],
+            _control["service"],
+            {"entity_id": entity_id, **_control["data"]},
             blocking=True,
         )
         return {

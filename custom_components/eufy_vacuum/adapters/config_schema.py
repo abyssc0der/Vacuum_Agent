@@ -989,17 +989,36 @@ ADAPTER_CONFIG_SCHEMA: dict[str, dict] = {
                     "key. Absent key (or 0) = no debounce, every flip counts."
                 ),
             },
-            "action_buttons": {
+            "action_controls": {
                 "type": "dict[str, dict]",
                 "required": False,
                 "description": (
-                    "Resolves the upstream button entity for each dock action. "
-                    "Keyed by framework action name ('wash_mop', 'dry_mop', "
-                    "'stop_dry_mop', 'empty_dust'). Each value: "
-                    "{'entity_suffixes': [str] appended to 'button.{object_id}_' "
-                    "tried in order; 'token_sets': [[str]] each an all-tokens-"
-                    "must-match registry fallback}. Absent action = no button "
-                    "resolved (the action is reported unavailable)."
+                    "DECLARE HOW THIS DOCK IS DRIVEN -- one entry per framework action "
+                    "('wash_mop', 'dry_mop', 'stop_dry_mop', 'empty_dust'). Each value: "
+                    "{'entity_suffixes': [str] appended to '<domain>.{object_id}_', tried "
+                    "in order; 'token_sets': [[str]] each an all-tokens-must-match "
+                    "registry fallback, BUTTON DOMAIN ONLY; 'domain': the HA domain the "
+                    "control lives in, default 'button'; 'service': the service to call, "
+                    "default 'press' for the button domain and REQUIRED for any other; "
+                    "'data': dict of extra service fields}. An absent action resolves to "
+                    "nothing and is reported unavailable. "
+                    "WAS 'action_buttons', and the name was the defect: named for its "
+                    "first consumer, it became a lie the moment a brand drove its dock "
+                    "with something else. Roborock does -- wash/dry/empty are SWITCHES "
+                    "(mop_washing / mop_drying / dust_emptying) and the device publishes "
+                    "no dock button at all. "
+                    "THE PAIR THIS SHAPE EXISTS TO EXPRESS: on Roborock 'dry_mop' and "
+                    "'stop_dry_mop' are the SAME entity with inverse services (turn_on / "
+                    "turn_off, upstream APP_SET_DRYER_STATUS 1 and 0). The old schema "
+                    "could not say that at all. A future select-driven control is "
+                    "{'domain': 'select', 'service': 'select_option', 'data': {...}} with "
+                    "no further schema change, because this is a service-call description "
+                    "-- the same contract dispatch.global_pre_calls already uses. "
+                    "token_sets stay button-only on purpose: the registry fallback they "
+                    "drive scans 'button.{object_id}_'. A non-button control declares "
+                    "entity_suffixes, which resolve through the shared act-path ladder "
+                    "(derived id -> sibling suffix -> upstream translation_key) and so "
+                    "survive the localized install where this is needed most."
                 ),
             },
         },

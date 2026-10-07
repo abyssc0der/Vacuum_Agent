@@ -37,7 +37,7 @@ Architecture reference: [41 — Maintenance and the Dock](../../dev/41-maintenan
   allowed action presses the button (`performed=True`), a gated action returns
   `performed=False` with the gate reason.
 - **Entity resolution** — `_get_dock_action_entity` resolves a present button
-  from the adapter's `dock_events.action_buttons` (the test registers a config
+  from the adapter's `dock_events.action_controls` (the test registers a config
   with `entity_suffixes`); an action absent from that map resolves to `None`. A
   token-fallback test [DK-17] also exercises resolution of a differently-named
   button via the adapter's `token_sets` when no `entity_suffix` matches

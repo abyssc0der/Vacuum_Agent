@@ -107,7 +107,7 @@ merely *reads* today as Roborock's word.
 
 ### Four dock actions are declared where only three are probed
 
-`dock_events.action_buttons` iterates the union of candidates and tokens, so it declares four while
+`dock_events.action_controls` iterates the union of candidates and tokens, so it declares four while
 `entity_candidates` probes three. Removing the fourth is not a tidy-up.
 `adapters/eufy/buttons.py::DOCK_ACTION_TOKENS` substring-matches, and the dock manager builds rival
 token sets from every *other* action's tokens to stop one action binding a button another owns.

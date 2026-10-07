@@ -636,7 +636,7 @@ def register_dreame_adapter_for_vacuum(
                 "last_dry_start": ["drying"],
             },
             "debounce_seconds": {"last_mop_wash": 60},
-            "action_buttons": {
+            "action_controls": {
                 "wash_mop": {"entity_suffixes": ["self_clean"], "token_sets": [["self", "clean"]]},
                 "dry_mop": {"entity_suffixes": ["manual_drying"], "token_sets": [["manual", "drying"]]},
                 "empty_dust": {"entity_suffixes": ["start_auto_empty"], "token_sets": [["start", "auto", "empty"]]},

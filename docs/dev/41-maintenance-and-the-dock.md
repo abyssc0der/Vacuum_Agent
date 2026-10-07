@@ -129,8 +129,8 @@ That is the wrong question for this gate, and nothing about the check looks wron
   deliberately holds the slot open through.
 
 So every dock action reported itself available, the card offered them, and
-`dock/manager.py::_async_run_dock_action` pressed the button **on a robot that was about to
-resume.**
+`dock/manager.py::_async_run_dock_action` fired the action **on a robot that was about to
+resume.** (It said "pressed the button" until §4b; the control is whatever the adapter declares.)
 
 ⚠ **And it corrupted the measurement on the way past.** The resulting dock event increments the
 mop-wash counter, which the water amendment consumes as the count at finalization — so an action
@@ -165,6 +165,59 @@ it. State strings are the brand's, so they are declared. Event-type keys are our
 owned — and being owned does not excuse being duplicated.
 
 ---
+
+---
+
+## 4b. The dock declares how it is DRIVEN, not just what it is called
+
+§4 is about the brand's *words*. This is about the brand's *wiring*, and it was the same mistake
+one level down: the contract let an adapter name a dock control but not say how to operate it,
+because the framework had already decided. `dock_events.action_buttons` was the key, the resolver
+hardcoded `domain="button"`, and the dispatch hardcoded `("button", "press")`.
+
+That is fine for exactly as long as every dock is buttons. Roborock's is not: wash, dry and empty
+are **switches** (`mop_washing`, `mop_drying`, `dust_emptying`) and the device publishes no dock
+button at all. The declaration surface could not express that, so no amount of declaring would
+have helped — the domain was fixed in the resolver *and* in the send, which is two places to
+forget and one of the ways `supports_zone_clean` ended up open at one end and unconnected at the
+other ([24 §8](24-roborock-adapter.md)).
+
+The key is now **`action_controls`**, and each entry is a *service-call description*:
+
+```python
+{"entity_suffixes": [...], "token_sets": [...],
+ "domain": "button",   # default — every brand that shipped before this is unchanged
+ "service": "press",   # default for button; REQUIRED for any other domain
+ "data": {}}
+```
+
+Both the resolver and the dispatch read it through one helper, so they cannot disagree about what
+a control is. The old name is the lesson: it was named for its first consumer and became a lie the
+moment a second kind of consumer appeared.
+
+**The pair that proves the shape.** On Roborock, `dry_mop` and `stop_dry_mop` are the *same entity*
+with inverse services — `turn_on` / `turn_off`, upstream `APP_SET_DRYER_STATUS` 1 and 0. Under the
+old schema that was unrepresentable. Here it is the same `entity_suffixes` twice with a different
+`service`, and no carve-out. A future select-driven control is `{"domain": "select", "service":
+"select_option", "data": {...}}` with no further schema change.
+
+**`service` is required once a non-button domain is declared, and is never guessed.** "switch"
+alone does not say `turn_on` or `turn_off`, and the pair above uses both on one entity — so a
+default would be a coin flip on physical hardware, and on the dry pair a 50% chance of starting a
+dryer someone asked to stop. The dispatch refuses and names the missing declaration.
+
+**`token_sets` stay button-only.** The registry fallback they drive scans `button.{object_id}_`, so
+running it for a switch could only return a wrong entity or nothing. A non-button control declares
+`entity_suffixes`, which resolve through the shared act-path ladder (derived id → sibling suffix →
+upstream `translation_key`) and so survive the localized install where this is needed most.
+
+There is deliberately **no momentary-vs-stateful field**. One was drafted and dropped because
+nothing would read it: the presence of `stop_dry_mop` in the declaration *is* the statefulness, and
+a field no consumer reads is a preference, not a contract.
+
+Covered by `[DC-1]`..`[DC-5]`. `[DC-3]` is the no-regression guard — an entry naming neither domain
+nor service must still resolve a button, or the rename broke the two brands that already had dock
+support.
 
 ## 5. Common wrong assumptions
 

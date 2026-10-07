@@ -601,7 +601,7 @@ def register_eufy_adapter_for_vacuum(
             # buttons.py. entity_suffixes are tried first (appended to
             # 'button.{object_id}_'); token_sets are all-tokens-must-match
             # registry fallbacks for firmware naming drift.
-            "action_buttons": _build_button_blocks(
+            "action_controls": _build_button_blocks(
                 DOCK_ACTION_CANDIDATES, DOCK_ACTION_TOKENS
             ),
         },

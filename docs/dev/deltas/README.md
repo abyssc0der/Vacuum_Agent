@@ -159,7 +159,7 @@ the two interact.** Shipped in 2.0.1. When a declared companion entity id does n
 the state machine, `adapters/entity_resolve.py` searches the vacuum's own config entry for a
 domain+suffix match and remaps. **DR edit required in 21 and 22:** doc 22 already documents a
 *different* registry fallback — per-role `token_sets` ("all-tokens-must-match") for dock
-`action_buttons` and maintenance `reset_button`. There are now two rescue mechanisms with
+`action_controls` and maintenance `reset_button`. There are now two rescue mechanisms with
 different scopes, one declared per-role and one global and implicit, and no document states
 which runs first. That is capability/adapter semantics, which [00 §2.2](../history/disaster-recovery-standard.md)
 puts in DR.

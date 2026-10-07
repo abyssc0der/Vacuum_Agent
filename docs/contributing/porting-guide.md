@@ -77,7 +77,7 @@ example.
 | `entities.py` | Entity-ID naming convention (role → entity_id). |
 | `vocabulary.py` | Brand state-string vocabulary sets. |
 | `lifecycle.py` | Brand lifecycle signal helpers. |
-| `buttons.py` | Dock-action and replacement-reset button candidate/token lists (the single source `adapter.py` builds `dock_events.action_buttons` and `maintenance_components[*].reset_button` from). |
+| `buttons.py` | Dock-action and replacement-reset button candidate/token lists (the single source `adapter.py` builds `dock_events.action_controls` and `maintenance_components[*].reset_button` from). |
 | `maintenance_components.py`, `upkeep_catalog.py`, `eufy_upkeep_guides.py` (+ `upkeep_guides_i18n/`), `water_config.py`, `model_catalog.py`, `constants.py` | Static per-model catalogs, upkeep guides, and tuned constants. |
 | `segmentor.py` | (Optional) brand CV map segmentor. |
 

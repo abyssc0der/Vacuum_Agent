@@ -339,7 +339,7 @@ def test_get_action_entity_resolves(dock, hass):
     from custom_components.eufy_vacuum.adapters.registry import register_adapter_config
     register_adapter_config(_VAC, {
         "adapter_id": "eufy_test", "source": "code",
-        "dock_events": {"action_buttons": {
+        "dock_events": {"action_controls": {
             "wash_mop": {"entity_suffixes": ["wash_mop", "mop_wash"], "token_sets": []},
         }},
     })
@@ -356,7 +356,7 @@ def test_get_action_entity_token_fallback(dock, hass):
     from custom_components.eufy_vacuum.adapters.registry import register_adapter_config
     register_adapter_config(_VAC, {
         "adapter_id": "eufy_test", "source": "code",
-        "dock_events": {"action_buttons": {
+        "dock_events": {"action_controls": {
             # named suffix is absent; only the token fallback can match
             "wash_mop": {"entity_suffixes": ["wash_mop"], "token_sets": [["wash", "mop"]]},
         }},
@@ -398,7 +398,7 @@ def test_get_action_entity_dry_mop_survives_the_stop_dry_mop_collision(
 
     register_adapter_config(_VAC, {
         "adapter_id": "eufy_test", "source": "code",
-        "dock_events": {"action_buttons": _build_button_blocks(
+        "dock_events": {"action_controls": _build_button_blocks(
             DOCK_ACTION_CANDIDATES, DOCK_ACTION_TOKENS)},
     })
 
@@ -433,3 +433,90 @@ async def test_dispatch_wrappers(dock, monkeypatch, method, action):
     result = await getattr(dock, method)(vacuum_entity_id=_VAC, map_id=_MAP)
     assert result["action"] == action
     assert result["performed"] is False
+
+
+# --- the dock is DECLARED, not assumed to be buttons (issue #66 seam) --------
+
+
+def _declare_controls(controls):
+    from custom_components.eufy_vacuum.adapters.registry import register_adapter_config
+    register_adapter_config(_VAC, {
+        "adapter_id": "eufy_test", "source": "code",
+        "dock_events": {"action_controls": controls},
+    })
+
+
+def test_dc_1_a_switch_driven_control_resolves_in_its_own_domain(dock, hass):
+    """[DC-1] THE RED INPUT. A dock whose controls are SWITCHES, not buttons.
+
+    Roborock publishes no dock button at all — wash/dry/empty are switches
+    (mop_washing / mop_drying / dust_emptying). Resolution was hardcoded to the
+    button domain, so such a control could not be found no matter what an adapter
+    declared.
+
+    ABLATION: put `domain="button"` back in the resolver and this goes red — the
+    entity is a switch, so the button-prefixed id does not exist.
+    """
+    _declare_controls({
+        "wash_mop": {"entity_suffixes": ["mop_washing"], "domain": "switch",
+                     "service": "turn_on"},
+    })
+    hass.states.async_set("switch.alfred_mop_washing", "off")
+    assert dock._get_dock_action_entity(
+        vacuum_entity_id=_VAC, action="wash_mop") == "switch.alfred_mop_washing"
+
+
+def test_dc_3_an_undeclared_domain_still_means_a_button_press(dock, hass):
+    """[DC-3] THE NO-REGRESSION GUARD. Every brand that shipped before this declared
+    neither domain nor service, and must keep resolving exactly as it did.
+
+    Defaults are button/press, so Eufy and Dreame are byte-identical. If this goes
+    red, the rename broke the two brands that already had dock support.
+    """
+    _declare_controls({
+        "wash_mop": {"entity_suffixes": ["wash_mop"], "token_sets": []},
+    })
+    hass.states.async_set("button.alfred_wash_mop", "idle")
+    assert dock._get_dock_action_entity(
+        vacuum_entity_id=_VAC, action="wash_mop") == "button.alfred_wash_mop"
+
+
+def test_dc_4_the_token_fallback_stays_button_only(dock, hass):
+    """[DC-4] The registry fallback scans `button.{object_id}_`, so running it for a
+    non-button control could only ever return a wrong entity or nothing.
+
+    A switch control with ONLY token_sets resolves to nothing — deliberately. The
+    honest path for a non-button control is entity_suffixes, which go through the
+    act-path ladder and survive a localized install.
+    """
+    from homeassistant.helpers import entity_registry as er
+    _declare_controls({
+        "wash_mop": {"entity_suffixes": [], "token_sets": [["wash", "mop"]],
+                     "domain": "switch", "service": "turn_on"},
+    })
+    er.async_get(hass).async_get_or_create(
+        "button", "eufy_vacuum", "alfred_station_wash_mop_now",
+        suggested_object_id="alfred_station_wash_mop_now",
+    )
+    assert dock._get_dock_action_entity(vacuum_entity_id=_VAC, action="wash_mop") is None
+
+
+def test_dc_5_a_non_button_domain_without_a_service_is_refused_not_guessed():
+    """[DC-5] "switch" alone does not say turn_on or turn_off, and DC-2's pair uses
+    BOTH on one entity — so a default here would be a coin flip on physical hardware.
+
+    The helper returns no service, and the dispatch refuses rather than pressing
+    something. Guessing turn_on would, on the dry pair, be a 50% chance of starting
+    a dryer the user asked to stop.
+    """
+    from custom_components.eufy_vacuum.dock.manager import _dock_control
+    cfg = {"dock_events": {"action_controls": {
+        "wash_mop": {"entity_suffixes": ["mop_washing"], "domain": "switch"},
+    }}}
+    control = _dock_control(cfg, "wash_mop")
+    assert control["domain"] == "switch"
+    assert control["service"] is None, "a service was guessed for a non-button domain"
+
+    # ...while the button default is still supplied, because it is unambiguous.
+    cfg_btn = {"dock_events": {"action_controls": {"wash_mop": {"entity_suffixes": ["w"]}}}}
+    assert _dock_control(cfg_btn, "wash_mop")["service"] == "press"
