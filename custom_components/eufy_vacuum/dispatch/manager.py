@@ -876,11 +876,14 @@ class DispatchManager:
                     + " — the device's global setting cannot be applied"
                 )
                 if _use_safest:
-                    raise HomeAssistantError(
-                        f"could not apply the safe water setting before a run with "
-                        f"vacuum-only rooms: {_msg}; dispatch aborted to avoid "
-                        f"wet-mopping dry rooms"
+                    # For safest-water entries on devices without the mop entity (e.g. vacuum-only
+                    # devices), skip the setting but continue the run. If the device has no mop
+                    # hardware, there's no water to apply and no risk of wet-mopping.
+                    _LOGGER.warning(
+                        "%s; skipping safe water setting for vacuum-only run (device has no mop "
+                        "hardware)", _msg
                     )
+                    continue
                 _LOGGER.warning("%s; leaving it as the device has it", _msg)
                 continue
 
